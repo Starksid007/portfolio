@@ -700,7 +700,7 @@ img::-moz-selection {
 }
 .social ul{
     position : absolute;
-    top : 50%;
+    top : 80%;
     left : 50%;
     padding : 0;
     margin : 0;
