@@ -740,4 +740,8 @@ img::-moz-selection {
 .social ul li:nth-child(3) a:hover{
     background color : #34465d;
 }
+.social ul li:nth-child(4) a:hover{
+    background color : #34465d;
+}
+
 
