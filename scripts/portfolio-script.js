@@ -1,8 +1,3 @@
-// portfolio-script.js
-
-
-// script to implement scrollReveal, scrollspy.
-// also has a tiny function to pass some options to stellar.js
 !function(jQuery) {
   
     "use strict";
@@ -25,7 +20,6 @@
             top: 100
         }
     }),
-    //this calls Stellar.JS and passes in a few options to modify the parallax effect
     jQuery(window).stellar({
         horizontalScrolling: false,
         verticalOffset: 0,
