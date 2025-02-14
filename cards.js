@@ -46,7 +46,7 @@ const creditCards = [
 ];
 
 function displayCards(cards) {
-    const container = document.getElementById('creditCardContainer');
+    const container = document.getElementById('creditCardContainer'); // Corrected ID
     container.innerHTML = '';
     cards.forEach(card => {
         const cardElement = document.createElement('div');
@@ -54,6 +54,7 @@ function displayCards(cards) {
         cardElement.innerHTML = `
             <h2>${card.name}</h2>
             <p><strong>Bank:</strong> ${card.bank}</p>
+            
             <p class="sub-heading">Domestic Lounge Access:</p>
             <p>${card.benefits.domesticLounge.access}</p>
             <p class="spend-based">Spend Criteria: ${card.benefits.domesticLounge.spendBased}</p>
