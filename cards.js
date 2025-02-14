@@ -46,7 +46,7 @@ const creditCards = [
 ];
 
 function displayCards(cards) {
-    const container = document.getElementById('cardContainer');
+    const container = document.getElementById('creditCardContainer');
     container.innerHTML = '';
     cards.forEach(card => {
         const cardElement = document.createElement('div');
