@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Credit Card Info</title>
-    <link rel="stylesheet" href="cards.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Credit Card Information</h1>
+        <h1>Explore Credit Cards</h1>
 
-        <input type="text" id="searchBox" placeholder="Search by Bank Name or Credit Card Name..." onkeyup="searchCards()">
+        <div class="search-bar">
+            <input type="text" id="searchBox" placeholder="🔍 Search by Bank or Card Name..." onkeyup="searchCards()">
+        </div>
 
-        <div id="creditCardContainer">
-            <!-- Cards will be dynamically added here -->
+        <div id="creditCardContainer" class="card-grid">
+            <!-- Cards will be dynamically inserted here -->
         </div>
     </div>
 
-    <script src="cards.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
