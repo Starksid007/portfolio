@@ -46,7 +46,7 @@ const creditCards = [
             lifetimeFree: true,
         },
         applyLink: "https://www.icicibank.com/apply-coral"
-    }
+    },
     {
         bank: "Axis Bank",
         name: "Indianoil Axis Bank Credit Card",
