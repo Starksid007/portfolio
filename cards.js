@@ -114,8 +114,8 @@ const creditCards = [
             coupons: "30% Off on EazyDiner",
         },
         cashbackRewards: {
-            cashback: "1% Fuel Surcharge Waiver ( 400 - 5000 Rs )",
-            rewardPoints: "2 Edge Reward Points on 125 rs spent, 20 Reward Points for 100 Rs Fuel Txn.",
+            cashback: "TBD",
+            rewardPoints: "TBD",
         },
         fees: {
             joiningFee: "₹12500 ( Vouchers worth 12,500)",
@@ -139,13 +139,63 @@ const creditCards = [
             coupons: "10% Off on Swiggy & Amazon Fresh ( Every Wednesday )",
         },
         cashbackRewards: {
-            cashback: "1% Fuel Surcharge Waiver ( 400 - 5000 Rs )",
-            rewardPoints: "2 Edge Reward Points on 125 rs spent, 20 Reward Points for 100 Rs Fuel Txn.",
+            cashback: "TBD",
+            rewardPoints: "TBD",
         },
         fees: {
             joiningFee: "₹1500",
             annualFee: "₹1500",
             lifetimeFree: false,
+        },
+        applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
+    },
+    {
+        bank: "Axis Bank",
+        name: "Flipkart Axis Bank Credit Card",
+        image: "https://via.placeholder.com/280x180",
+        benefits: {
+            welcomeBenefits: "500 Flipkart Voucher",
+            domesticLounge: "4 per year (India)",
+            internationalLounge: "NA",
+            spendBased: "On spend of Rs. 50,000 in previous quarter.",
+            railwayLounge: "NA",
+            movieOffer: "NA",
+            golfAccess: "NA",
+            coupons: "10% Off on Swiggy & Amazon Fresh ( Every Wednesday )",
+        },
+        cashbackRewards: {
+            cashback: "5% Unlimited Cashback On Flipkart",
+            rewardPoints: "TBD",
+        },
+        fees: {
+            joiningFee: "₹500",
+            annualFee: "₹500",
+            lifetimeFree: false,
+        },
+        applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
+    },
+    {
+        bank: "Axis Bank",
+        name: "Axis Bank MY Zone Credit Card",
+        image: "https://via.placeholder.com/280x180",
+        benefits: {
+            welcomeBenefits: "1 Year Sony LIV Membership",
+            domesticLounge: "4 per year (India)",
+            internationalLounge: "NA",
+            spendBased: "On spend of Rs. 50,000 in previous quarter.",
+            railwayLounge: "NA",
+            movieOffer: "B1G1 on District App ( Max 200 Rs )",
+            golfAccess: "NA",
+            coupons: "Flat 120 Rs Off on Swiggy ( Min 500 Rs Spend ), 15% On EazyDiner upto 500 ( Min Spend 2500 ) ",
+        },
+        cashbackRewards: {
+            cashback: "5% Unlimited Cashback On Flipkart",
+            rewardPoints: "TBD",
+        },
+        fees: {
+            joiningFee: "₹500",
+            annualFee: "₹500",
+            lifetimeFree: true,
         },
         applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
     }
