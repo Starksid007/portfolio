@@ -70,6 +70,54 @@ const creditCards = [
             lifetimeFree: false,
         },
         applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
+    },
+    {
+        bank: "Axis Bank",
+        name: "Rewards Credit Card",
+        image: "https://via.placeholder.com/280x180",
+        benefits: {
+            domesticLounge: "2 per quarter (India)",
+            internationalLounge: "NA",
+            spendBased: "On spend of Rs. 50,000 in previous quarter.",
+            railwayLounge: "NA",
+            movieOffer: "10% off on movie tickets ( BMS )",
+            golfAccess: "NA",
+            coupons: "30% Off on Swiggy on Minimum 200 Rs Txn. ( Max 150 Discount ), 10% Off on Swiggy & Amazon Fresh ( Every Wednesday )",
+        },
+        cashbackRewards: {
+            cashback: "1% Fuel Surcharge Waiver ( 400 - 5000 Rs )",
+            rewardPoints: "2 Edge Reward Points on 125 rs spent, 20 Reward Points for 100 Rs Fuel Txn.",
+        },
+        fees: {
+            joiningFee: "₹1000",
+            annualFee: "₹1000",
+            lifetimeFree: false,
+        },
+        applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
+    },
+    {
+        bank: "Axis Bank",
+        name: "Axis Bank Magnus Credit Card",
+        image: "https://via.placeholder.com/280x180",
+        benefits: {
+            domesticLounge: "Unlimited (India)",
+            internationalLounge: "Unlimited (Outside India)",
+            spendBased: "On spend of Rs. 50,000 in previous quarter.",
+            railwayLounge: "NA",
+            movieOffer: "10% off on movie tickets ( BMS )",
+            golfAccess: "NA",
+            coupons: "30% Off on EazyDiner",
+        },
+        cashbackRewards: {
+            cashback: "1% Fuel Surcharge Waiver ( 400 - 5000 Rs )",
+            rewardPoints: "2 Edge Reward Points on 125 rs spent, 20 Reward Points for 100 Rs Fuel Txn.",
+        },
+        fees: {
+            joiningFee: "₹12500 ( Vouchers worth 12,500)",
+            annualFee: "₹12500",
+            lifetimeFree: false,
+        },
+        applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
     }
 ];
 
