@@ -4,6 +4,7 @@ const creditCards = [
         name: "HDFC Regalia Credit Card",
         image: "https://via.placeholder.com/280x180",
         benefits: {
+            welcomeBenefits: "NA",
             domesticLounge: "4 per quarter (India)",
             internationalLounge: "2 per year (Outside India)",
             spendBased: "Yes, spend ₹5L for unlimited access",
@@ -28,6 +29,7 @@ const creditCards = [
         name: "ICICI Coral Credit Card",
         image: "https://via.placeholder.com/280x180",
         benefits: {
+            welcomeBenefits: "NA",
             domesticLounge: "1 per quarter (India)",
             internationalLounge: "Not Available",
             spendBased: "No",
@@ -52,6 +54,7 @@ const creditCards = [
         name: "Indianoil Axis Bank Credit Card",
         image: "https://via.placeholder.com/280x180",
         benefits: {
+            welcomeBenefits: "NA",
             domesticLounge: "NA",
             internationalLounge: "NA",
             spendBased: "NA",
@@ -76,6 +79,7 @@ const creditCards = [
         name: "Rewards Credit Card",
         image: "https://via.placeholder.com/280x180",
         benefits: {
+            welcomeBenefits: "NA",
             domesticLounge: "2 per quarter (India)",
             internationalLounge: "NA",
             spendBased: "On spend of Rs. 50,000 in previous quarter.",
@@ -100,6 +104,7 @@ const creditCards = [
         name: "Axis Bank Magnus Credit Card",
         image: "https://via.placeholder.com/280x180",
         benefits: {
+            welcomeBenefits: "NA",
             domesticLounge: "Unlimited (India)",
             internationalLounge: "Unlimited (Outside India)",
             spendBased: "On spend of Rs. 50,000 in previous quarter.",
@@ -118,6 +123,31 @@ const creditCards = [
             lifetimeFree: false,
         },
         applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
+    },
+    {
+        bank: "Axis Bank",
+        name: "Axis Bank Vistara Credit Card",
+        image: "https://via.placeholder.com/280x180",
+        benefits: {
+            welcomeBenefits: "Complimentary Economy Class Ticket ( Annually )",
+            domesticLounge: "2 per quarter (India)",
+            internationalLounge: "NA",
+            spendBased: "On spend of Rs. 50,000 in previous quarter.",
+            railwayLounge: "NA",
+            movieOffer: "NA",
+            golfAccess: "NA",
+            coupons: "10% Off on Swiggy & Amazon Fresh ( Every Wednesday )",
+        },
+        cashbackRewards: {
+            cashback: "1% Fuel Surcharge Waiver ( 400 - 5000 Rs )",
+            rewardPoints: "2 Edge Reward Points on 125 rs spent, 20 Reward Points for 100 Rs Fuel Txn.",
+        },
+        fees: {
+            joiningFee: "₹1500",
+            annualFee: "₹1500",
+            lifetimeFree: false,
+        },
+        applyLink: "https://web.axisbank.co.in/DigitalChannel/WebForm/?index6&utm_content=ioclproduct&utm_campaign=cciocl&utm_source=website&axisreferralcode=ioclproduct&_gl=1*1khasj7*_gcl_au*MTUwMDM4NDk3Ny4xNzM4NTAxNDI2*_ga*MjAyNDczNzYxMi4xNzM4NTAxNDI2*_ga_CH41PE7401*MTczOTU5OTYzMi43LjEuMTczOTU5OTkxMy41Ni4wLjA."
     }
 ];
 
@@ -132,6 +162,7 @@ function displayCards(cards = creditCards) {
         cardElement.innerHTML = `
             <h3>${card.name}</h3>
             <p class="bank-name">${card.bank}</p>
+            <p><strong>Welcome Benefits:</strong> ${card.benefits.welcomeBenefits}</p>
             <p><strong>Domestic Lounge:</strong> ${card.benefits.domesticLounge}</p>
             <p><strong>International Lounge:</strong> ${card.benefits.internationalLounge}</p>
             <p><strong>Spend-Based Access:</strong> ${card.benefits.spendBased}</p>
