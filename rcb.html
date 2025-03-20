@@ -45,6 +45,13 @@
         let secondInningTeam = [...playing11];
         let replacedPlayer = null;
         let impactUsed = false;
+        let squadVisible = false;
+
+        function toggleSquadVisibility() {
+            squadVisible = !squadVisible;
+            document.getElementById("squad-section").style.display = squadVisible ? "block" : "none";
+            document.getElementById("toggle-squad-btn").innerText = squadVisible ? "Hide Squad" : "Show Squad";
+        }
 
         function updateSquadSelection() {
             document.getElementById("squad-list").innerHTML = squad.map(player => 
@@ -124,6 +131,7 @@
         window.onload = function() {
             updateSquadSelection();
             updatePlaying11();
+            document.getElementById("squad-section").style.display = "none"; // Hide squad initially
         };
     </script>
 </head>
@@ -131,12 +139,16 @@
     <h1>Royal Challengers Bangalore 2025</h1>
     <p class="instructions">Select 11 players from the squad and then choose an impact player. Your selections will be saved even after a refresh.</p>
 
-    <div class="container">
+    <button id="toggle-squad-btn" onclick="toggleSquadVisibility()">Show Squad</button>
+
+    <div class="container" id="squad-section">
         <div class="team-section">
             <h2>Squad</h2>
             <ul class="team-list" id="squad-list"></ul>
         </div>
+    </div>
 
+    <div class="container">
         <div class="impact-selection">
             <h2>Select Impact Player</h2>
             <select id="impact-select" onchange="updateImpactPlayer()"></select>
