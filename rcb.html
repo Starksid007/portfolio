@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RCB 2025</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Additional Highlight Classes */
+    .highlight-orange {
+      background-color: orange !important;
+    }
+    .highlight-darkgreen {
+      background-color: darkgreen !important;
+    }
+  </style>
   <script>
     let roleIcons = {
       'Batsman': '🏏',
@@ -121,28 +130,27 @@
     }
 
     function updatePlaying11() {
-    let sortedPlaying11 = sortTeam(playing11);
-    document.getElementById("playing11-list").innerHTML = sortedPlaying11.map((player, index) => {
-        let styleAttr = player.name === replacedPlayingName ? 'background: 	Maroon !important;' : '';
-        return `<li onclick="replaceWithImpact('${player.name}', '${player.role}')" style="${styleAttr}">
-        <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
-        <span class="role-icon">${roleIcons[player.role] || ''}</span>
-        </li>`;
-    }).join('');
-    updateSecondInnings();
-    updateImpactDropdown();
+      let sortedPlaying11 = sortTeam(playing11);
+      document.getElementById("playing11-list").innerHTML = sortedPlaying11.map((player, index) =>
+        `<li onclick="replaceWithImpact('${player.name}', '${player.role}')" class="${player.name === replacedPlayingName ? 'highlight-orange' : ''}">
+          <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
+          <span class="role-icon">${roleIcons[player.role] || ''}</span>
+        </li>`
+      ).join('');
+      updateSecondInnings();
+      updateImpactDropdown();
     }
 
-function updateSecondInnings() {
-  let sortedSecondInningsTeam = sortTeam(secondInningTeam);
-  document.getElementById("second-inning-list").innerHTML = sortedSecondInningsTeam.map((player, index) => {
-    let styleAttr = player.replaced ? 'background: darkgreen !important; color: white !important;' : '';
-    return `<li style="${styleAttr}">
-      <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
-      <span class="role-icon">${roleIcons[player.role] || ''}</span>
-    </li>`;
-  }).join('');
-}
+    function updateSecondInnings() {
+      // We sort the team, but the replaced element will carry a 'replaced' property.
+      let sortedSecondInningsTeam = sortTeam(secondInningTeam);
+      document.getElementById("second-inning-list").innerHTML = sortedSecondInningsTeam.map((player, index) =>
+        `<li class="${player.replaced ? 'highlight-darkgreen' : ''}">
+          <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
+          <span class="role-icon">${roleIcons[player.role] || ''}</span>
+        </li>`
+      ).join('');
+    }
 
     function updateSquadSelection() {
       let sortedSquad = sortTeam(squad);
@@ -250,6 +258,6 @@ function updateSecondInnings() {
     </div>
   </div>
   <button onclick="resetLocalStorage()">Reset</button>
-  <p>Made with ❤️ by starksid (Siddharth Kushwaha)
+
 </body>
 </html>
