@@ -53,9 +53,10 @@
 
     let playing11 = JSON.parse(localStorage.getItem("playing11")) || [];
     let impactPlayer = JSON.parse(localStorage.getItem("impactPlayer")) || null;
+    // secondInningTeam starts as a copy of playing11.
     let secondInningTeam = [...playing11];
-    let replacedPlayingName = null; // Stores the name of the playing11 player that was replaced
-    let replacedIndex = null; // Stores the index in the second innings list that was replaced
+    // Global variable to track which playing11 player was replaced.
+    let replacedPlayingName = null;
 
     // Helper function to get sort order index based on role.
     function getRoleSortIndex(role) {
@@ -119,9 +120,10 @@
         return;
       }
       localStorage.setItem("playing11", JSON.stringify(playing11));
+      // Reset secondInningTeam to the saved playing11
       secondInningTeam = [...playing11];
+      // Clear any previous replacement marker.
       replacedPlayingName = null;
-      replacedIndex = null;
       updatePlaying11();
       updateSecondInnings();
       document.getElementById("squad-container").style.display = "none";
@@ -140,9 +142,10 @@
     }
 
     function updateSecondInnings() {
+      // We sort the team, but the replaced element will carry a 'replaced' property.
       let sortedSecondInningsTeam = sortTeam(secondInningTeam);
       document.getElementById("second-inning-list").innerHTML = sortedSecondInningsTeam.map((player, index) =>
-        `<li class="${index === replacedIndex ? 'highlight-darkgreen' : ''}">
+        `<li class="${player.replaced ? 'highlight-darkgreen' : ''}">
           <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
           <span class="role-icon">${roleIcons[player.role] || ''}</span>
         </li>`
@@ -193,20 +196,24 @@
 
     function replaceWithImpact(playerName, playerRole) {
       if (!impactPlayer) return;
-      // Determine the index in secondInningTeam corresponding to this player.
-      let index = secondInningTeam.findIndex(player => player.name === playerName);
-      if (index === -1) return;
-      
-      // Store the playing11 player that was clicked so we can highlight it.
+      // Clear any previous 'replaced' flags in secondInningTeam.
+      secondInningTeam.forEach(p => { if(p.replaced) delete p.replaced; });
+      // Store which playing11 player was clicked for highlighting.
       replacedPlayingName = playerName;
-      // Remember the index to highlight in second innings.
-      replacedIndex = index;
-      // Replace that player with the impact player.
-      secondInningTeam[index] = impactPlayer;
-
+      // Find the corresponding index in secondInningTeam.
+      let index = secondInningTeam.findIndex(p => p.name === playerName);
+      if (index === -1) return;
+      // Replace that element with a copy of the impact player and mark it.
+      secondInningTeam[index] = { ...impactPlayer, replaced: true };
       updatePlaying11();
       updateSecondInnings();
     }
+
+    function resetLocalStorage() {
+    localStorage.clear();
+    // Optionally, reload the page to reflect the changes:
+    location.reload();
+  }
 
     function toggleSquad() {
       let squadContainer = document.getElementById("squad-container");
@@ -224,9 +231,7 @@
 <body>
   <h1>Royal Challengers Bangalore 2025</h1>
   <p class="instructions">Select 11 players and save your squad.</p>
-
   <button onclick="toggleSquad()">Show/Hide Squad</button>
-
   <div class="container" id="squad-container" style="display: none;">
     <div class="team-section">
       <h2>Squad</h2>
@@ -235,7 +240,6 @@
       <button onclick="saveSquad()">Save Squad</button>
     </div>
   </div>
-
   <div class="container">
     <div class="impact-selection">
       <h3>Impact Player</h3>
@@ -243,7 +247,6 @@
     </div>
   </div>
   <br>
-
   <div class="container">
     <div class="team-section">
       <h2>1st Inning: 🏏</h2>
@@ -254,5 +257,7 @@
       <ul class="team-list" id="second-inning-list"></ul>
     </div>
   </div>
+  <button onclick="resetLocalStorage()">Reset</button>
+
 </body>
 </html>
