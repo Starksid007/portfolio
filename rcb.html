@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RCB 2025</title>
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        let roleIcons = {
+            'Batsman': '🏏',
+            'Bowler': '⚾',
+            'Wicketkeeper': '🧤',
+            'All-rounder': '🏏⚾',
+            'Wicketkeeper-Batsman': '🧤🏏',
+            'Captain': 'C 🏏'
+        };
+
+        let squad = [
+            { name: 'Virat Kohli', role: 'Batsman' },
+            { name: 'Phil Salt', role: 'Wicketkeeper-Batsman' },
+            { name: 'Jitesh Sharma', role: 'Wicketkeeper-Batsman' },
+            { name: 'Rajat Patidar', role: 'Captain' },
+            { name: 'Devdutt Padikkal', role: 'Batsman' },
+            { name: 'Swastik Chhikara', role: 'Batsman' },
+            { name: 'Liam Livingstone', role: 'All-rounder' },
+            { name: 'Krunal Pandya', role: 'All-rounder' },
+            { name: 'Swapnil Singh', role: 'All-rounder' },
+            { name: 'Tim David', role: 'All-rounder' },
+            { name: 'Romario Shepherd', role: 'All-rounder' },
+            { name: 'Manoj Bhandage', role: 'All-rounder' },
+            { name: 'Jacob Bethell', role: 'All-rounder' },
+            { name: 'Josh Hazelwood', role: 'Bowler' },
+            { name: 'Rasikh Dar', role: 'Bowler' },
+            { name: 'Suyash Sharma', role: 'Bowler' },
+            { name: 'Bhuvneshwar Kumar', role: 'Bowler' },
+            { name: 'Nuwan Thushara', role: 'Bowler' },
+            { name: 'Lungi Ngidi', role: 'Bowler' },
+            { name: 'Abhinandan Singh', role: 'Bowler' },
+            { name: 'Mohit Rathee', role: 'Bowler' },
+            { name: 'Yash Dayal', role: 'Bowler' }
+        ];
+
+        let playing11 = JSON.parse(localStorage.getItem("playing11")) || [];
+        let impactPlayer = JSON.parse(localStorage.getItem("impactPlayer")) || null;
+        let secondInningTeam = [...playing11];
+        let replacedPlayer = null;
+        let impactUsed = false;
+
+        function updateSquadSelection() {
+            document.getElementById("squad-list").innerHTML = squad.map(player => 
+                `<li>
+                    <input type="checkbox" class="player-checkbox" value="${player.name}" 
+                        ${playing11.some(p => p.name === player.name) ? 'checked' : ''} 
+                        onchange="selectPlayer('${player.name}', '${player.role}')">
+                    <strong>${player.name}</strong> ${roleIcons[player.role] || ''}
+                </li>`
+            ).join('');
+        }
+
+        function selectPlayer(playerName, playerRole) {
+            let checkbox = document.querySelector(`input[value="${playerName}"]`);
+            if (checkbox.checked) {
+                if (playing11.length < 11) {
+                    playing11.push({ name: playerName, role: playerRole });
+                } else {
+                    checkbox.checked = false;
+                    alert("You can only select 11 players.");
+                }
+            } else {
+                playing11 = playing11.filter(player => player.name !== playerName);
+            }
+            localStorage.setItem("playing11", JSON.stringify(playing11));
+            updatePlaying11();
+        }
+
+        function updatePlaying11() {
+            document.getElementById("playing11-list").innerHTML = playing11.map(player => 
+                `<li onclick="replaceWithImpact('${player.name}', '${player.role}')">
+                    <strong>${player.name}</strong> ${roleIcons[player.role] || ''}
+                </li>`
+            ).join('');
+            secondInningTeam = [...playing11];
+            updateImpactDropdown();
+        }
+
+        function updateImpactDropdown() {
+            let impactDropdown = document.getElementById("impact-select");
+            impactDropdown.innerHTML = playing11.map(player =>
+                `<option value="${player.name}" ${impactPlayer && impactPlayer.name === player.name ? 'selected' : ''}>
+                    ${player.name} (${player.role})
+                </option>`
+            ).join('');
+            if (playing11.length > 0 && !impactPlayer) {
+                impactPlayer = playing11[0];
+                localStorage.setItem("impactPlayer", JSON.stringify(impactPlayer));
+            }
+            if (impactPlayer) {
+                document.getElementById("impact-name").innerText = impactPlayer.name;
+                document.getElementById("impact-role").innerText = roleIcons[impactPlayer.role] || '';
+            }
+        }
+
+        function updateImpactPlayer() {
+            let selectedValue = document.getElementById("impact-select").value;
+            let selectedPlayer = playing11.find(player => player.name === selectedValue);
+            if (selectedPlayer) {
+                impactPlayer = { name: selectedPlayer.name, role: selectedPlayer.role };
+                localStorage.setItem("impactPlayer", JSON.stringify(impactPlayer));
+                document.getElementById("impact-name").innerText = impactPlayer.name;
+                document.getElementById("impact-role").innerText = roleIcons[impactPlayer.role] || '';
+            }
+        }
+
+        function replaceWithImpact(playerName, playerRole) {
+            if (impactPlayer && !impactUsed) {
+                replacedPlayer = { name: playerName, role: playerRole };
+                secondInningTeam = secondInningTeam.filter(player => player.name !== playerName);
+                secondInningTeam.push(impactPlayer);
+                impactUsed = true;
+                updatePlaying11();
+            }
+        }
+
+        window.onload = function() {
+            updateSquadSelection();
+            updatePlaying11();
+        };
+    </script>
+</head>
+<body>
+    <h1>Royal Challengers Bangalore 2025</h1>
+    <p class="instructions">Select 11 players from the squad and then choose an impact player. Your selections will be saved even after a refresh.</p>
+
+    <div class="container">
+        <div class="team-section">
+            <h2>Squad</h2>
+            <ul class="team-list" id="squad-list"></ul>
+        </div>
+
+        <div class="impact-selection">
+            <h2>Select Impact Player</h2>
+            <select id="impact-select" onchange="updateImpactPlayer()"></select>
+        </div>
+
+        <div class="impact-player">
+            <p><strong id="impact-name">None</strong></p>
+            <p id="impact-role"></p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="team-section">
+            <h2>Playing 11</h2>
+            <ul class="team-list" id="playing11-list"></ul>
+        </div>
+
+        <div class="team-section">
+            <h2>2nd Inning Team</h2>
+            <ul class="team-list" id="right-team"></ul>
+        </div>
+    </div>
+</body>
+</html>
