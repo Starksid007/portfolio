@@ -82,6 +82,7 @@ button:hover {
     color: black;
 }
 
+
 /* Impact Player */
 .impact-player {
     width: 100%;
@@ -105,7 +106,7 @@ button:hover {
 }
 
 .team-section {
-    width: calc(50% - 5px);
+    width: calc(50% - 8px);
     flex-shrink: 0;
 }
 
