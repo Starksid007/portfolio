@@ -109,6 +109,14 @@ button:hover {
     flex-shrink: 0;       /* Prevent shrinking below calculated width */
 }
 
+.impact-selection {
+    display: flex;
+    justify-content: space-between; /* Pushes items to the ends */
+    align-items: center;
+    width: 100%;
+    padding: 0 10px; /* Optional: adds horizontal padding */
+}
+
 /* Adjustments for mobile - decrease font size and padding */
 @media (max-width: 768px) {
     .team-list li {
