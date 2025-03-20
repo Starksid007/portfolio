@@ -43,6 +43,7 @@
         let playing11 = JSON.parse(localStorage.getItem("playing11")) || [];
         let impactPlayer = JSON.parse(localStorage.getItem("impactPlayer")) || null;
         let secondInningTeam = [...playing11];
+        let replacedPlayer = null;
 
 
         function selectPlayer(playerName, playerRole) {
@@ -136,13 +137,24 @@ function updateSquadSelection() {
             }
         }
 
-        function replaceWithImpact(playerName) {
-            if (impactPlayer) {
-                secondInningTeam = secondInningTeam.filter(player => player.name !== playerName);
-                secondInningTeam.push(impactPlayer);
-                updateSecondInnings();
-            }
-        }
+function replaceWithImpact(playerName) {
+    if (!impactPlayer) return;
+
+    // Restore the previously replaced player if there was one
+    if (replacedPlayer) {
+        secondInningTeam = secondInningTeam.map(player =>
+            player.name === impactPlayer.name ? replacedPlayer : player
+        );
+    }
+
+    // Replace the clicked player with the impact player
+    replacedPlayer = secondInningTeam.find(player => player.name === playerName);
+    secondInningTeam = secondInningTeam.map(player =>
+        player.name === playerName ? impactPlayer : player
+    );
+
+    updateSecondInnings();
+}
 
         function toggleSquad() {
             let squadContainer = document.getElementById("squad-container");
