@@ -45,9 +45,9 @@
     let playing11 = JSON.parse(localStorage.getItem("playing11")) || [];
     let impactPlayer = JSON.parse(localStorage.getItem("impactPlayer")) || null;
     // secondInningTeam starts as a copy of playing11.
-let secondInningTeam = JSON.parse(localStorage.getItem("secondInningTeam")) || [...playing11];
+    let secondInningTeam = [...playing11];
     // Global variable to track which playing11 player was replaced.
-    let replacedPlayingName = localStorage.getItem("replacedPlayingName") || null;
+    let replacedPlayingName = null;
 
     // Helper function to get sort order index based on role.
     function getRoleSortIndex(role) {
@@ -101,39 +101,37 @@ let secondInningTeam = JSON.parse(localStorage.getItem("secondInningTeam")) || [
         `Selected: ${playing11.length}/11 (Overseas: ${countOverseasPlayers()}/4)`;
     }
 
-function saveSquad() {
-  if (playing11.length !== 11) {
-    alert("You must select exactly 11 players.");
-    return;
-  }
-  if (countOverseasPlayers() > 4) {
-    alert("Only 4 overseas players can be in the playing 11.");
-    return;
-  }
-  localStorage.setItem("playing11", JSON.stringify(playing11));
-  // Reset secondInningTeam to match playing11 and store it.
-  secondInningTeam = [...playing11];
-  localStorage.setItem("secondInningTeam", JSON.stringify(secondInningTeam));
-  // Clear any previous replacement marker.
-  replacedPlayingName = null;
-  localStorage.removeItem("replacedPlayingName");
-  updatePlaying11();
-  updateSecondInnings();
-  document.getElementById("squad-container").style.display = "none";
-}
+    function saveSquad() {
+      if (playing11.length !== 11) {
+        alert("You must select exactly 11 players.");
+        return;
+      }
+      if (countOverseasPlayers() > 4) {
+        alert("Only 4 overseas players can be in the playing 11.");
+        return;
+      }
+      localStorage.setItem("playing11", JSON.stringify(playing11));
+      // Reset secondInningTeam to the saved playing11
+      secondInningTeam = [...playing11];
+      // Clear any previous replacement marker.
+      replacedPlayingName = null;
+      updatePlaying11();
+      updateSecondInnings();
+      document.getElementById("squad-container").style.display = "none";
+    }
 
-function updatePlaying11() {
-  let sortedPlaying11 = sortTeam(playing11);
-  document.getElementById("playing11-list").innerHTML = sortedPlaying11.map((player, index) => {
-    let styleAttr = player.name === replacedPlayingName ? 'background: orange !important;' : '';
-    return `<li onclick="replaceWithImpact('${player.name}', '${player.role}')" style="${styleAttr}">
-      <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
-      <span class="role-icon">${roleIcons[player.role] || ''}</span>
-    </li>`;
-  }).join('');
-  updateSecondInnings();
-  updateImpactDropdown();
-}
+    function updatePlaying11() {
+    let sortedPlaying11 = sortTeam(playing11);
+    document.getElementById("playing11-list").innerHTML = sortedPlaying11.map((player, index) => {
+        let styleAttr = player.name === replacedPlayingName ? 'background: 	Maroon !important;' : '';
+        return `<li onclick="replaceWithImpact('${player.name}', '${player.role}')" style="${styleAttr}">
+        <strong>${index + 1}. ${player.name}${player.overseas ? ' ✈️' : ''}</strong>
+        <span class="role-icon">${roleIcons[player.role] || ''}</span>
+        </li>`;
+    }).join('');
+    updateSecondInnings();
+    updateImpactDropdown();
+    }
 
 function updateSecondInnings() {
   let sortedSecondInningsTeam = sortTeam(secondInningTeam);
@@ -188,22 +186,20 @@ function updateSecondInnings() {
       document.getElementById("impact-role").innerText = roleIcons[impactPlayer.role] || '';
     }
 
-function replaceWithImpact(playerName, playerRole) {
-  if (!impactPlayer) return;
-  // Clear any previous 'replaced' flags.
-  secondInningTeam.forEach(p => { if (p.replaced) delete p.replaced; });
-  // Set the clicked player's name as replaced.
-  replacedPlayingName = playerName;
-  localStorage.setItem("replacedPlayingName", replacedPlayingName);
-  // Find the index in secondInningTeam.
-  let index = secondInningTeam.findIndex(p => p.name === playerName);
-  if (index === -1) return;
-  // Replace the element with impactPlayer and mark it.
-  secondInningTeam[index] = { ...impactPlayer, replaced: true };
-  localStorage.setItem("secondInningTeam", JSON.stringify(secondInningTeam));
-  updatePlaying11();
-  updateSecondInnings();
-}
+    function replaceWithImpact(playerName, playerRole) {
+      if (!impactPlayer) return;
+      // Clear any previous 'replaced' flags in secondInningTeam.
+      secondInningTeam.forEach(p => { if(p.replaced) delete p.replaced; });
+      // Store which playing11 player was clicked for highlighting.
+      replacedPlayingName = playerName;
+      // Find the corresponding index in secondInningTeam.
+      let index = secondInningTeam.findIndex(p => p.name === playerName);
+      if (index === -1) return;
+      // Replace that element with a copy of the impact player and mark it.
+      secondInningTeam[index] = { ...impactPlayer, replaced: true };
+      updatePlaying11();
+      updateSecondInnings();
+    }
 
     function resetLocalStorage() {
     localStorage.clear();
@@ -220,13 +216,6 @@ function replaceWithImpact(playerName, playerRole) {
       updateSquadSelection();
       updatePlaying11();
       updateImpactDropdown();
-      if (impactPlayer && replacedPlayingName) {
-    let index = secondInningTeam.findIndex(p => p.name === replacedPlayingName);
-    if (index !== -1) {
-      secondInningTeam[index] = { ...impactPlayer, replaced: true };
-      localStorage.setItem("secondInningTeam", JSON.stringify(secondInningTeam));
-    }
-  }
       updateSecondInnings();
     };
   </script>
