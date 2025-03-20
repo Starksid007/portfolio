@@ -44,16 +44,6 @@
         let impactPlayer = JSON.parse(localStorage.getItem("impactPlayer")) || null;
         let secondInningTeam = [...playing11];
 
-        function updateSquadSelection() {
-            document.getElementById("squad-list").innerHTML = squad.map(player => 
-                `<li>
-                    <input type="checkbox" class="player-checkbox" value="${player.name}" 
-                        ${playing11.some(p => p.name === player.name) ? 'checked' : ''} 
-                        onchange="selectPlayer('${player.name}', '${player.role}')">
-                    <strong>${player.name}</strong> ${roleIcons[player.role] || ''}
-                </li>`
-            ).join('');
-        }
 
         function selectPlayer(playerName, playerRole) {
             let checkbox = document.querySelector(`input[value="${playerName}"]`);
@@ -67,26 +57,56 @@
             } else {
                 playing11 = playing11.filter(player => player.name !== playerName);
             }
+            updatePlayerCount();
+        }
+
+        function updatePlayerCount() {
+            document.getElementById("player-count").innerText = `Selected: ${playing11.length}/11`;
+        }
+
+        function saveSquad() {
+            if (playing11.length !== 11) {
+                alert("You must select exactly 11 players.");
+                return;
+            }
             localStorage.setItem("playing11", JSON.stringify(playing11));
-            updatePlaying11();
-        }
-
-        function updatePlaying11() {
-            document.getElementById("playing11-list").innerHTML = playing11.map(player => 
-                `<li onclick="replaceWithImpact('${player.name}', '${player.role}')">
-                    <strong>${player.name}</strong> ${roleIcons[player.role] || ''}
-                </li>`
-            ).join('');
             secondInningTeam = [...playing11];
+            updatePlaying11();
             updateSecondInnings();
-            updateImpactDropdown();
         }
 
-        function updateSecondInnings() {
-            document.getElementById("second-inning-list").innerHTML = secondInningTeam.map(player => 
-                `<li><strong>${player.name}</strong> ${roleIcons[player.role] || ''}</li>`
-            ).join('');
-        }
+function updatePlaying11() {
+    document.getElementById("playing11-list").innerHTML = playing11.map((player, index) => 
+        `<li onclick="replaceWithImpact('${player.name}', '${player.role}')">
+            <strong>${index + 1}. ${player.name}</strong>
+            <span class="role-icon">${roleIcons[player.role] || ''}</span>
+        </li>`
+    ).join('');
+    updateSecondInnings();
+    updateImpactDropdown();
+}
+
+function updateSecondInnings() {
+    document.getElementById("second-inning-list").innerHTML = secondInningTeam.map((player, index) => 
+        `<li>
+            <strong>${index + 1}. ${player.name}</strong>
+            <span class="role-icon">${roleIcons[player.role] || ''}</span>
+        </li>`
+    ).join('');
+}
+
+function updateSquadSelection() {
+    document.getElementById("squad-list").innerHTML = squad.map(player => 
+        `<li>
+            <input type="checkbox" class="player-checkbox" value="${player.name}" 
+                ${playing11.some(p => p.name === player.name) ? 'checked' : ''} 
+                onchange="selectPlayer('${player.name}', '${player.role}')">
+            <strong>${player.name}</strong>
+            <span class="role-icon">${roleIcons[player.role] || ''}</span>
+        </li>`
+    ).join('');
+    updatePlayerCount();
+}
 
         function updateImpactDropdown() {
             let impactDropdown = document.getElementById("impact-select");
@@ -116,7 +136,7 @@
             }
         }
 
-        function replaceWithImpact(playerName, playerRole) {
+        function replaceWithImpact(playerName) {
             if (impactPlayer) {
                 secondInningTeam = secondInningTeam.filter(player => player.name !== playerName);
                 secondInningTeam.push(impactPlayer);
@@ -126,11 +146,7 @@
 
         function toggleSquad() {
             let squadContainer = document.getElementById("squad-container");
-            if (squadContainer.style.display === "none") {
-                squadContainer.style.display = "block";
-            } else {
-                squadContainer.style.display = "none";
-            }
+            squadContainer.style.display = (squadContainer.style.display === "none") ? "block" : "none";
         }
 
         window.onload = function() {
@@ -143,7 +159,7 @@
 </head>
 <body>
     <h1>Royal Challengers Bangalore 2025</h1>
-    <p class="instructions">Select 11 players from the squad and then choose an impact player. Your selections will be saved even after a refresh.</p>
+    <p class="instructions">Select exactly 11 players and save your squad.</p>
 
     <button onclick="toggleSquad()">Show/Hide Squad</button>
 
@@ -151,6 +167,8 @@
         <div class="team-section">
             <h2>Squad</h2>
             <ul class="team-list" id="squad-list"></ul>
+            <p id="player-count">Selected: 0/11</p>
+            <button onclick="saveSquad()">Save Squad</button>
         </div>
     </div>
 
