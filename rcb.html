@@ -43,15 +43,6 @@
         let playing11 = JSON.parse(localStorage.getItem("playing11")) || [];
         let impactPlayer = JSON.parse(localStorage.getItem("impactPlayer")) || null;
         let secondInningTeam = [...playing11];
-        let replacedPlayer = null;
-        let impactUsed = false;
-        let squadVisible = false;
-
-        function toggleSquadVisibility() {
-            squadVisible = !squadVisible;
-            document.getElementById("squad-section").style.display = squadVisible ? "block" : "none";
-            document.getElementById("toggle-squad-btn").innerText = squadVisible ? "Hide Squad" : "Show Squad";
-        }
 
         function updateSquadSelection() {
             document.getElementById("squad-list").innerHTML = squad.map(player => 
@@ -87,18 +78,25 @@
                 </li>`
             ).join('');
             secondInningTeam = [...playing11];
+            updateSecondInnings();
             updateImpactDropdown();
+        }
+
+        function updateSecondInnings() {
+            document.getElementById("second-inning-list").innerHTML = secondInningTeam.map(player => 
+                `<li><strong>${player.name}</strong> ${roleIcons[player.role] || ''}</li>`
+            ).join('');
         }
 
         function updateImpactDropdown() {
             let impactDropdown = document.getElementById("impact-select");
-            impactDropdown.innerHTML = playing11.map(player =>
+            impactDropdown.innerHTML = squad.map(player =>
                 `<option value="${player.name}" ${impactPlayer && impactPlayer.name === player.name ? 'selected' : ''}>
                     ${player.name} (${player.role})
                 </option>`
             ).join('');
-            if (playing11.length > 0 && !impactPlayer) {
-                impactPlayer = playing11[0];
+            if (!impactPlayer && squad.length > 0) {
+                impactPlayer = squad[0];
                 localStorage.setItem("impactPlayer", JSON.stringify(impactPlayer));
             }
             if (impactPlayer) {
@@ -109,7 +107,7 @@
 
         function updateImpactPlayer() {
             let selectedValue = document.getElementById("impact-select").value;
-            let selectedPlayer = playing11.find(player => player.name === selectedValue);
+            let selectedPlayer = squad.find(player => player.name === selectedValue);
             if (selectedPlayer) {
                 impactPlayer = { name: selectedPlayer.name, role: selectedPlayer.role };
                 localStorage.setItem("impactPlayer", JSON.stringify(impactPlayer));
@@ -119,19 +117,27 @@
         }
 
         function replaceWithImpact(playerName, playerRole) {
-            if (impactPlayer && !impactUsed) {
-                replacedPlayer = { name: playerName, role: playerRole };
+            if (impactPlayer) {
                 secondInningTeam = secondInningTeam.filter(player => player.name !== playerName);
                 secondInningTeam.push(impactPlayer);
-                impactUsed = true;
-                updatePlaying11();
+                updateSecondInnings();
+            }
+        }
+
+        function toggleSquad() {
+            let squadContainer = document.getElementById("squad-container");
+            if (squadContainer.style.display === "none") {
+                squadContainer.style.display = "block";
+            } else {
+                squadContainer.style.display = "none";
             }
         }
 
         window.onload = function() {
             updateSquadSelection();
             updatePlaying11();
-            document.getElementById("squad-section").style.display = "none"; // Hide squad initially
+            updateImpactDropdown();
+            updateSecondInnings();
         };
     </script>
 </head>
@@ -139,9 +145,9 @@
     <h1>Royal Challengers Bangalore 2025</h1>
     <p class="instructions">Select 11 players from the squad and then choose an impact player. Your selections will be saved even after a refresh.</p>
 
-    <button id="toggle-squad-btn" onclick="toggleSquadVisibility()">Show Squad</button>
+    <button onclick="toggleSquad()">Show/Hide Squad</button>
 
-    <div class="container" id="squad-section">
+    <div class="container" id="squad-container" style="display: none;">
         <div class="team-section">
             <h2>Squad</h2>
             <ul class="team-list" id="squad-list"></ul>
@@ -168,7 +174,7 @@
 
         <div class="team-section">
             <h2>2nd Inning Team</h2>
-            <ul class="team-list" id="right-team"></ul>
+            <ul class="team-list" id="second-inning-list"></ul>
         </div>
     </div>
 </body>
