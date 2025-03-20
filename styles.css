@@ -96,34 +96,30 @@ button:hover {
     font-size: calc(11px + 0.2vw);
 }
 
-/* Mobile View Adjustments */
+.team-container {
+    display: flex;
+    flex-wrap: nowrap;  /* Prevent wrapping */
+    gap: 10px;          /* 10px gap between sections */
+    width: 100%;
+    overflow-x: auto;   /* Allow horizontal scroll if needed */
+}
+
+.team-section {
+    width: calc(50% - 5px); /* Adjust width to account for the gap */
+    flex-shrink: 0;       /* Prevent shrinking below calculated width */
+}
+
+/* Adjustments for mobile - decrease font size and padding */
 @media (max-width: 768px) {
-    .container {
-        flex-direction: column;
-        align-items: center;
-        padding: 12px;
-    }
-
-    .team-container {
-        flex-direction: row;
-        flex-wrap: nowrap; /* Keep them side by side */
-        gap: 10px;
-    }
-
-    .team-section {
-        width: 50%; /* Ensure 1st and 2nd innings take half width */
-    }
-
     .team-list li {
-        width: 100%;
+        font-size: 10px;
+        padding: 4px;
     }
-
     h1 {
-        font-size: calc(12px + 0.5vw);
+        font-size: 16px;
     }
-
     button {
-        font-size: calc(10px + 0.2vw);
-        padding: 6px 12px;
+        font-size: 10px;
+        padding: 4px 6px;
     }
 }
