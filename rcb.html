@@ -197,7 +197,6 @@ function replaceWithImpact(playerName, playerRole) {
   // If there's already a replaced player (and it's not the one being clicked),
   // revert that previous substitution back to its original data.
   if (replacedPlayingName && replacedPlayingName !== playerName) {
-    // Find the original data from playing11
     let originalPlayer = playing11.find(p => p.name === replacedPlayingName);
     if (originalPlayer) {
       // Find the slot in secondInningTeam with the matching originalName.
