@@ -201,32 +201,36 @@
         updatePlayerCount();
       }
 
-      function updateImpactDropdown() {
-        let impactDropdown = document.getElementById("impact-select");
-        impactDropdown.innerHTML = squad
-          .filter(
-            (player) =>
-              !player.overseas &&
-              !playing11.some((p) => p.name === player.name)
-          )
-          .map(
-            (player) =>
-              `<option value="${player.name}" ${
-                impactPlayer && impactPlayer.name === player.name
-                  ? "selected"
-                  : ""
-              }>
-                  ${player.name} (${player.role})
-                </option>`
-          )
-          .join("");
-        if (impactPlayer) {
-          document.getElementById("impact-name").innerText =
-            impactPlayer.name;
-          document.getElementById("impact-role").innerText =
-            roleIcons[impactPlayer.role] || "";
+    function updateImpactDropdown() {
+    let impactDropdown = document.getElementById("impact-select");
+    let overseasCount = playing11.filter(player => player.overseas).length;
+    let filteredPlayers = squad.filter(player => {
+        // If fewer than 4 overseas players in playing11, include both overseas and local players
+        if (overseasCount < 4) {
+        return !playing11.some(p => p.name === player.name);
+        } else {
+        // Otherwise, only include non-overseas players
+        return !player.overseas && !playing11.some(p => p.name === player.name);
         }
-      }
+    });
+
+    impactDropdown.innerHTML = filteredPlayers
+        .map(player =>
+        `<option value="${player.name}" ${
+            impactPlayer && impactPlayer.name === player.name ? "selected" : ""
+        }>
+            ${player.name}${
+              player.overseas ? " ✈️" : ""
+            }  (${player.role})
+        </option>`
+        )
+        .join("");
+
+    if (impactPlayer) {
+        document.getElementById("impact-name").innerText = impactPlayer.name;
+        document.getElementById("impact-role").innerText = roleIcons[impactPlayer.role] || "";
+    }
+    }
 
       function updateImpactPlayer() {
         let selectedValue = document.getElementById("impact-select").value;
