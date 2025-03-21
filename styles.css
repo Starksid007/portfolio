@@ -1,133 +1,120 @@
 body {
-    font-family: 'Poppins', sans-serif;
-    background-color: #f3f3f3;
-    text-align: center;
-    margin: 0;
-    padding: 20px;
-    font-size: calc(10px + 0.3vw);
+  font-family: 'Poppins', sans-serif;
+  background-color: #f3f3f3;
+  text-align: center;
+  margin: 0;
+  padding: 20px;
+  font-size: calc(10px + 0.3vw);
 }
 
 /* Container */
 .container {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    max-width: 900px;
-    margin: 0 auto;
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* 1st & 2nd Inning in Columns */
 .team-container {
-    display: flex;
-    justify-content: space-between;
-    gap: 15px;
-    width: 100%;
-    flex-wrap: wrap;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .team-section {
-    width: 48%;
+  width: calc(50% - 8px);
+  flex-shrink: 0;
 }
 
 /* Heading */
 h1 {
-    color: #b71c1c;
-    font-size: calc(14px + 0.5vw);
+  color: #b71c1c;
+  font-size: calc(14px + 0.5vw);
 }
 
 /* Squad List */
 .team-list {
-    list-style: none;
-    padding: 0;
+  list-style: none;
+  padding: 0;
 }
 
 .team-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px;
-    margin: 5px 0;
-    border-radius: 6px;
-    font-size: calc(11px + 0.3vw);
-    font-weight: bold;
-    background: linear-gradient(to right, #b71c1c 80%, #fbc02d 20%);
-    color: white;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  margin: 5px 0;
+  border-radius: 6px;
+  font-size: calc(11px + 0.3vw);
+  font-weight: bold;
+  background: linear-gradient(to right, #b71c1c 80%, #fbc02d 20%);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
 }
 
 .team-list li:hover {
-    transform: scale(1.05);
+  transform: scale(1.05);
 }
 
 /* Buttons */
 button {
-    padding: 8px 14px;
-    margin: 6px;
-    background-color: #b71c1c;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: calc(11px + 0.2vw);
+  padding: 8px 14px;
+  margin: 6px;
+  background-color: #b71c1c;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: calc(11px + 0.2vw);
 }
 
 button:hover {
-    background-color: #fbc02d;
-    color: black;
+  background-color: #fbc02d;
+  color: black;
 }
-
 
 /* Impact Player */
 .impact-player {
-    width: 100%;
-    padding: 6px;
-    background-color: white;
-    border-radius: 8px;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    font-size: calc(11px + 0.2vw);
-}
-
-.team-container {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 10px;
-    width: 100%;
-    overflow-x: auto;
-}
-
-.team-section {
-    width: calc(50% - 8px);
-    flex-shrink: 0;
+  width: 100%;
+  padding: 6px;
+  background-color: white;
+  border-radius: 8px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  font-size: calc(11px + 0.2vw);
 }
 
 .impact-selection {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    padding: 0 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 10px;
 }
 
 @media (max-width: 768px) {
-    .team-list li {
-        font-size: 10px;
-        padding: 4px;
-    }
-    h1 {
-        font-size: 16px;
-    }
-    button {
-        font-size: 10px;
-        padding: 4px 6px;
-    }
+  .team-list li {
+    font-size: 10px;
+    padding: 4px;
+  }
+  h1 {
+    font-size: 16px;
+  }
+  button {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
 }
