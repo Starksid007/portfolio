@@ -124,6 +124,12 @@ button:hover {
     padding: 0 10px;
 }
 
+.schedule-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 @media (max-width: 768px) {
     .team-list li {
         font-size: 10px;
