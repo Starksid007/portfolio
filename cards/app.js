@@ -120,7 +120,7 @@ function renderCards(filter = '') {
             <div class="card-top">
                 <div>
                     <div class="bank-name">🏦 ${escapeHtml(card.bankName)}</div>
-                    <div class="card-name">💳 ${escapeHtml(card.cardName)}</div>
+                    <div class="card-name">${card.cardType === 'Debit Card' ? '🏧' : '💳'} ${escapeHtml(card.cardName)} <span class="card-type-badge ${card.cardType === 'Debit Card' ? 'debit' : 'credit'}">${card.cardType || 'Credit Card'}</span></div>
                 </div>
                 <button class="card-copy-all ${shown ? 'active' : ''}" data-action="copyall" data-index="${i}" title="Copy all details">📋</button>
             </div>
@@ -313,7 +313,8 @@ saveCardBtn.addEventListener('click', async () => {
 
     try {
         const encryptedData = await encryptData({ number, expiry, cvv }, pin);
-        const newCard = { bankName, cardName, encryptedData };
+        const cardType = document.querySelector('input[name="cardType"]:checked').value;
+        const newCard = { bankName, cardName, cardType, encryptedData };
         if (holderName) newCard.holderName = holderName;
         cards.push(newCard);
         saveCards(cards);
