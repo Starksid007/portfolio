@@ -419,6 +419,97 @@ function showToast(msg) {
 }
 
 // ============================
+// 🏦 BANK DROPDOWN
+// ============================
+
+const BANKS = [
+    "Axis Bank", "Bandhan Bank", "Bank of Baroda", "Bank of India", "Bank of Maharashtra",
+    "Canara Bank", "Central Bank of India", "City Union Bank", "CSB Bank",
+    "DCB Bank", "Dhanlaxmi Bank", "Federal Bank",
+    "HDFC Bank", "ICICI Bank", "IDBI Bank", "IDFC First Bank",
+    "Indian Bank", "Indian Overseas Bank", "IndusInd Bank",
+    "Jammu & Kashmir Bank", "Karnataka Bank", "Karur Vysya Bank", "Kotak Mahindra Bank",
+    "Nainital Bank", "Punjab & Sind Bank", "Punjab National Bank",
+    "RBL Bank", "South Indian Bank", "State Bank of India (SBI)",
+    "Tamilnad Mercantile Bank", "UCO Bank", "Union Bank of India",
+    "YES Bank",
+    "American Express", "Citibank", "DBS Bank", "Deutsche Bank",
+    "HSBC", "Standard Chartered Bank",
+    "AU Small Finance Bank", "Equitas Small Finance Bank", "Ujjivan Small Finance Bank",
+    "Jana Small Finance Bank", "Suryoday Small Finance Bank",
+    "Paytm Payments Bank", "Airtel Payments Bank", "India Post Payments Bank",
+    "Fino Payments Bank", "Jio Payments Bank",
+    "Bajaj Finserv", "OneCard", "Slice", "Fi Money", "Jupiter"
+];
+
+const bankInput = document.getElementById('newBankName');
+const bankDropdown = document.getElementById('bankDropdown');
+let selectedBankIndex = -1;
+
+bankInput.addEventListener('input', () => {
+    const query = bankInput.value.toLowerCase().trim();
+    selectedBankIndex = -1;
+    if (!query) { bankDropdown.style.display = 'none'; return; }
+
+    const matches = BANKS.filter(b => b.toLowerCase().includes(query));
+    if (matches.length === 0) { bankDropdown.style.display = 'none'; return; }
+
+    bankDropdown.innerHTML = matches.map((b, i) =>
+        `<div class="dropdown-item" data-index="${i}">${highlightMatch(b, query)}</div>`
+    ).join('');
+    bankDropdown.style.display = 'block';
+});
+
+bankInput.addEventListener('keydown', (e) => {
+    const items = bankDropdown.querySelectorAll('.dropdown-item');
+    if (!items.length || bankDropdown.style.display === 'none') return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedBankIndex = Math.min(selectedBankIndex + 1, items.length - 1);
+        updateDropdownHighlight(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedBankIndex = Math.max(selectedBankIndex - 1, 0);
+        updateDropdownHighlight(items);
+    } else if (e.key === 'Enter' && selectedBankIndex >= 0) {
+        e.preventDefault();
+        bankInput.value = items[selectedBankIndex].textContent;
+        bankDropdown.style.display = 'none';
+    }
+});
+
+bankInput.addEventListener('focus', () => {
+    if (bankInput.value.trim()) bankInput.dispatchEvent(new Event('input'));
+});
+
+bankDropdown.addEventListener('click', (e) => {
+    const item = e.target.closest('.dropdown-item');
+    if (item) {
+        bankInput.value = item.textContent;
+        bankDropdown.style.display = 'none';
+    }
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown-group')) bankDropdown.style.display = 'none';
+});
+
+function updateDropdownHighlight(items) {
+    items.forEach((el, i) => el.classList.toggle('active', i === selectedBankIndex));
+    if (items[selectedBankIndex]) items[selectedBankIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function highlightMatch(text, query) {
+    const idx = text.toLowerCase().indexOf(query);
+    if (idx === -1) return escapeHtml(text);
+    return escapeHtml(text.substring(0, idx)) +
+        `<strong>${escapeHtml(text.substring(idx, idx + query.length))}</strong>` +
+        escapeHtml(text.substring(idx + query.length));
+}
+
+// ============================
 // 🚀 INIT
 // ============================
 
