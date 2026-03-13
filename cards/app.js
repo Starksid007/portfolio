@@ -8,7 +8,6 @@
 
 const STORAGE_KEY = 'cardvault_cards';
 const HOLDER_KEY = 'cardvault_holder';
-const PIN_KEY = 'cardvault_pin';
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const PBKDF2_ITERATIONS = 100000;
@@ -90,7 +89,7 @@ const deleteMsg = document.getElementById('deleteMsg');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 
 let cards = loadCards();
-let sessionPin = localStorage.getItem(PIN_KEY) || null;
+let sessionPin = null;
 let revealedCards = new Set();
 let decryptedCache = {};
 let pendingRevealIndex = null;
@@ -244,7 +243,6 @@ unlockBtn.addEventListener('click', async () => {
         const i = pendingRevealIndex;
         decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
         revealedCards.add(i); sessionPin = pin;
-        localStorage.setItem(PIN_KEY, pin);
         hidePinModal(); renderCards(searchInput.value);
     } catch {
         sessionPin = null;
@@ -269,7 +267,7 @@ addCardBtn.addEventListener('click', () => {
     document.getElementById('newCardNumber').value = '';
     document.getElementById('newExpiry').value = '';
     document.getElementById('newCvv').value = '';
-    // Pre-fill PIN from localStorage (persists across sessions)
+    // Pre-fill PIN from current session only (not stored in localStorage)
     document.getElementById('newPin').value = sessionPin || '';
     setTimeout(() => document.getElementById('newBankName').focus(), 100);
 });
@@ -320,9 +318,8 @@ saveCardBtn.addEventListener('click', async () => {
         cards.push(newCard);
         saveCards(cards);
         sessionPin = pin;
-        // Remember holder name and PIN for next time
+        // Remember holder name for next time (PIN is session-only, not stored)
         if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
-        localStorage.setItem(PIN_KEY, pin);
         hideAddCardModal();
         renderCards(searchInput.value);
         showToast('✅ Card encrypted & saved!');
