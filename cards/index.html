@@ -74,9 +74,10 @@
             </div>
             <p class="modal-desc">Enter card details — they'll be encrypted with your PIN</p>
 
-            <div class="form-group">
+            <div class="form-group dropdown-group">
                 <label>Bank Name</label>
-                <input type="text" id="newBankName" placeholder="e.g., HDFC Bank" autocomplete="off">
+                <input type="text" id="newBankName" placeholder="Type to search banks..." autocomplete="off">
+                <div id="bankDropdown" class="dropdown-list" style="display:none;"></div>
             </div>
             <div class="form-group">
                 <label>Card Name</label>
