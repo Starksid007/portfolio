@@ -150,6 +150,7 @@ header h1 {
 
 /* ===== Footer ===== */
 footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.8rem; }
+.made-by { margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted); letter-spacing: 0.5px; }
 
 /* ===== Modal ===== */
 .modal-overlay {
