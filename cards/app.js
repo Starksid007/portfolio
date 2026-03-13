@@ -7,6 +7,8 @@
 // ============================================================
 
 const STORAGE_KEY = 'cardvault_cards';
+const HOLDER_KEY = 'cardvault_holder';
+const PIN_KEY = 'cardvault_pin';
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const PBKDF2_ITERATIONS = 100000;
@@ -88,7 +90,7 @@ const deleteMsg = document.getElementById('deleteMsg');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 
 let cards = loadCards();
-let sessionPin = null;
+let sessionPin = localStorage.getItem(PIN_KEY) || null;
 let revealedCards = new Set();
 let decryptedCache = {};
 let pendingRevealIndex = null;
@@ -121,26 +123,25 @@ function renderCards(filter = '') {
                     <div class="bank-name">🏦 ${escapeHtml(card.bankName)}</div>
                     <div class="card-name">💳 ${escapeHtml(card.cardName)}</div>
                 </div>
-                <div class="card-chip"></div>
+                <button class="card-copy-all ${shown ? 'active' : ''}" data-action="copyall" data-index="${i}" title="Copy all details">📋</button>
             </div>
             <div class="card-details">
                 <div class="detail-row">
                     <span class="detail-label">Number</span>
                     <span class="detail-value card-number-display ${shown ? 'revealed' : ''}">${shown && dec ? formatCardNumber(dec.number) : '•••• •••• •••• ••••'}</span>
-                    <button class="copy-btn ${shown ? 'visible' : ''}" data-copy="${shown && dec ? dec.number : ''}" title="Copy">📋</button>
+                    <button class="copy-btn ${shown ? 'visible' : ''}" data-copy="${shown && dec ? dec.number : ''}" title="Copy number">📋</button>
                 </div>
                 <div class="card-bottom-row">
                     <div class="detail-row">
                         <span class="detail-label">Expiry</span>
                         <span class="detail-value ${shown ? 'revealed' : ''}">${shown && dec ? dec.expiry : '••/••'}</span>
-                        <button class="copy-btn ${shown ? 'visible' : ''}" data-copy="${shown && dec ? dec.expiry : ''}" title="Copy">📋</button>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">CVV</span>
                         <span class="detail-value ${shown ? 'revealed' : ''}">${shown && dec ? dec.cvv : '•••'}</span>
-                        <button class="copy-btn ${shown ? 'visible' : ''}" data-copy="${shown && dec ? dec.cvv : ''}" title="Copy">📋</button>
                     </div>
                 </div>
+                ${card.holderName ? `<div class="holder-name">${escapeHtml(card.holderName)}</div>` : ''}
             </div>
             <div class="card-action-row">
                 ${shown
@@ -172,6 +173,7 @@ cardGrid.addEventListener('click', (e) => {
     if (btn.dataset.action === 'reveal') requestReveal(idx);
     else if (btn.dataset.action === 'hide') hideCard(idx);
     else if (btn.dataset.action === 'delete') requestDelete(idx);
+    else if (btn.dataset.action === 'copyall') copyAllDetails(idx, btn);
 });
 
 // ============================
@@ -203,6 +205,29 @@ function hideCard(i) {
     renderCards(searchInput.value);
 }
 
+/**
+ * Copy all card details in a formatted text block
+ */
+function copyAllDetails(i, btnEl) {
+    const card = cards[i];
+    const dec = decryptedCache[i];
+    if (!dec) return;
+
+    const lines = [
+        `${card.bankName} : ${card.cardName}`,
+        dec.number,
+        dec.expiry,
+        dec.cvv
+    ];
+    if (card.holderName) lines.push(card.holderName);
+
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+        btnEl.textContent = '✅';
+        showToast('📋 All details copied!');
+        setTimeout(() => { btnEl.textContent = '📋'; }, 1500);
+    });
+}
+
 function showPinModal() {
     pinModal.style.display = 'flex'; pinInput.value = ''; pinError.style.display = 'none';
     setTimeout(() => pinInput.focus(), 100);
@@ -219,6 +244,7 @@ unlockBtn.addEventListener('click', async () => {
         const i = pendingRevealIndex;
         decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
         revealedCards.add(i); sessionPin = pin;
+        localStorage.setItem(PIN_KEY, pin);
         hidePinModal(); renderCards(searchInput.value);
     } catch {
         sessionPin = null;
@@ -238,10 +264,13 @@ addCardBtn.addEventListener('click', () => {
     addCardModal.style.display = 'flex'; addCardError.style.display = 'none';
     document.getElementById('newBankName').value = '';
     document.getElementById('newCardName').value = '';
+    // Pre-fill holder name from localStorage (persists across sessions)
+    document.getElementById('newHolderName').value = localStorage.getItem(HOLDER_KEY) || '';
     document.getElementById('newCardNumber').value = '';
     document.getElementById('newExpiry').value = '';
     document.getElementById('newCvv').value = '';
-    document.getElementById('newPin').value = '';
+    // Pre-fill PIN from localStorage (persists across sessions)
+    document.getElementById('newPin').value = sessionPin || '';
     setTimeout(() => document.getElementById('newBankName').focus(), 100);
 });
 
@@ -265,6 +294,7 @@ document.getElementById('newExpiry').addEventListener('input', function() {
 saveCardBtn.addEventListener('click', async () => {
     const bankName = document.getElementById('newBankName').value.trim();
     const cardName = document.getElementById('newCardName').value.trim();
+    const holderName = document.getElementById('newHolderName').value.trim();
     const number = document.getElementById('newCardNumber').value.replace(/\s/g, '').trim();
     const expiry = document.getElementById('newExpiry').value.trim();
     const cvv = document.getElementById('newCvv').value.trim();
@@ -285,9 +315,14 @@ saveCardBtn.addEventListener('click', async () => {
 
     try {
         const encryptedData = await encryptData({ number, expiry, cvv }, pin);
-        cards.push({ bankName, cardName, encryptedData });
+        const newCard = { bankName, cardName, encryptedData };
+        if (holderName) newCard.holderName = holderName;
+        cards.push(newCard);
         saveCards(cards);
         sessionPin = pin;
+        // Remember holder name and PIN for next time
+        if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
+        localStorage.setItem(PIN_KEY, pin);
         hideAddCardModal();
         renderCards(searchInput.value);
         showToast('✅ Card encrypted & saved!');
