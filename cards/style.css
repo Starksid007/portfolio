@@ -198,6 +198,26 @@ footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 
 .form-row { display: flex; gap: 1rem; }
 .form-row .form-group { flex: 1; }
 
+/* Searchable Dropdown */
+.dropdown-group { position: relative; }
+.dropdown-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    max-height: 200px; overflow-y: auto; background: var(--bg-primary);
+    border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.dropdown-item {
+    padding: 10px 14px; cursor: pointer; font-size: 0.95rem;
+    color: var(--text-secondary); transition: background 0.15s, color 0.15s;
+}
+.dropdown-item:hover, .dropdown-item.active {
+    background: rgba(233, 69, 96, 0.12); color: var(--text-primary);
+}
+.dropdown-item strong { color: var(--accent); font-weight: 700; }
+.dropdown-list::-webkit-scrollbar { width: 6px; }
+.dropdown-list::-webkit-scrollbar-track { background: transparent; }
+.dropdown-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
 /* ===== Toast ===== */
 .toast {
     position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px);
