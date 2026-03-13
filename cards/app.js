@@ -94,6 +94,8 @@ let revealedCards = new Set();
 let decryptedCache = {};
 let pendingRevealIndex = null;
 let pendingDeleteIndex = null;
+let editingIndex = null; // tracks which card is being edited
+let activeTypeFilter = 'all'; // 'all', 'Credit Card', or 'Debit Card'
 
 function escapeHtml(str) {
     const d = document.createElement('div'); d.textContent = str; return d.innerHTML;
@@ -110,6 +112,7 @@ function renderCards(filter = '') {
 
     cards.forEach((card, i) => {
         if (q && !card.bankName.toLowerCase().includes(q) && !card.cardName.toLowerCase().includes(q)) return;
+        if (activeTypeFilter !== 'all' && (card.cardType || 'Credit Card') !== activeTypeFilter) return;
         count++;
         const shown = revealedCards.has(i);
         const dec = decryptedCache[i];
@@ -122,7 +125,10 @@ function renderCards(filter = '') {
                     <div class="bank-name">🏦 ${escapeHtml(card.bankName)}</div>
                     <div class="card-name">${card.cardType === 'Debit Card' ? '🏧' : '💳'} ${escapeHtml(card.cardName)} <span class="card-type-badge ${card.cardType === 'Debit Card' ? 'debit' : 'credit'}">${card.cardType || 'Credit Card'}</span></div>
                 </div>
-                <button class="card-copy-all ${shown ? 'active' : ''}" data-action="copyall" data-index="${i}" title="Copy all details">📋</button>
+                <div class="card-top-icons">
+                    <button class="card-edit-btn" data-action="edit" data-index="${i}" title="Edit card">✏️</button>
+                    <button class="card-copy-all ${shown ? 'active' : ''}" data-action="copyall" data-index="${i}" title="Copy all details">📋</button>
+                </div>
             </div>
             <div class="card-details">
                 <div class="detail-row">
@@ -152,6 +158,12 @@ function renderCards(filter = '') {
     });
 
     noResults.style.display = count === 0 ? 'block' : 'none';
+    const total = cards.length;
+    const showing = count;
+    const filtered = activeTypeFilter !== 'all' || q;
+    document.getElementById('cardCount').innerHTML = filtered
+        ? `<span class="card-count-num">${showing}</span> of ${total} card${total !== 1 ? 's' : ''}`
+        : `<span class="card-count-num">${total}</span> card${total !== 1 ? 's' : ''}`;
 }
 
 // Delegate click events on card grid
@@ -173,6 +185,7 @@ cardGrid.addEventListener('click', (e) => {
     else if (btn.dataset.action === 'hide') hideCard(idx);
     else if (btn.dataset.action === 'delete') requestDelete(idx);
     else if (btn.dataset.action === 'copyall') copyAllDetails(idx, btn);
+    else if (btn.dataset.action === 'edit') openEditCard(idx);
 });
 
 // ============================
@@ -259,9 +272,13 @@ pinModal.addEventListener('click', e => { if (e.target === pinModal) hidePinModa
 // ============================
 
 addCardBtn.addEventListener('click', () => {
+    editingIndex = null;
     addCardModal.style.display = 'flex'; addCardError.style.display = 'none';
+    document.querySelector('#addCardModal .modal-header h2').textContent = '➕ Add New Card';
+    saveCardBtn.textContent = '🔐 Encrypt & Save';
     document.getElementById('newBankName').value = '';
     document.getElementById('newCardName').value = '';
+    document.querySelector('input[name="cardType"][value="Credit Card"]').checked = true;
     // Pre-fill holder name from localStorage (persists across sessions)
     document.getElementById('newHolderName').value = localStorage.getItem(HOLDER_KEY) || '';
     document.getElementById('newCardNumber').value = '';
@@ -272,21 +289,65 @@ addCardBtn.addEventListener('click', () => {
     setTimeout(() => document.getElementById('newBankName').focus(), 100);
 });
 
+// ✏️ EDIT CARD — opens the same modal pre-filled with card data
+async function openEditCard(i) {
+    const card = cards[i];
+    let dec = decryptedCache[i];
+
+    // If not already decrypted, need PIN first
+    if (!dec) {
+        if (!sessionPin) {
+            showToast('🔓 Please view the card first to edit it.');
+            return;
+        }
+        try {
+            dec = await decryptData(card.encryptedData, sessionPin);
+            decryptedCache[i] = dec;
+        } catch {
+            showToast('❌ Could not decrypt. View the card first.');
+            return;
+        }
+    }
+
+    editingIndex = i;
+    addCardModal.style.display = 'flex'; addCardError.style.display = 'none';
+    document.querySelector('#addCardModal .modal-header h2').textContent = '✏️ Edit Card';
+    saveCardBtn.textContent = '💾 Update Card';
+
+    document.getElementById('newBankName').value = card.bankName;
+    document.getElementById('newCardName').value = card.cardName;
+    const typeRadio = document.querySelector(`input[name="cardType"][value="${card.cardType || 'Credit Card'}"]`);
+    if (typeRadio) typeRadio.checked = true;
+    document.getElementById('newHolderName').value = card.holderName || '';
+    document.getElementById('newCardNumber').value = formatCardNumber(dec.number);
+    document.getElementById('newExpiry').value = dec.expiry;
+    document.getElementById('newCvv').value = dec.cvv;
+    document.getElementById('newPin').value = sessionPin || '';
+    setTimeout(() => document.getElementById('newBankName').focus(), 100);
+}
+
 function hideAddCardModal() { addCardModal.style.display = 'none'; }
 document.querySelector('#addCardModal .modal-close').addEventListener('click', hideAddCardModal);
 addCardModal.addEventListener('click', e => { if (e.target === addCardModal) hideAddCardModal(); });
 
-// Auto-format card number
+// Auto-format card number → auto-advance to expiry when 16 digits
 document.getElementById('newCardNumber').addEventListener('input', function() {
     let v = this.value.replace(/\D/g, '').substring(0, 16);
     this.value = v.replace(/(.{4})/g, '$1 ').trim();
+    if (v.length === 16) document.getElementById('newExpiry').focus();
 });
 
-// Auto-format expiry
+// Auto-format expiry → auto-advance to CVV when MM/YY complete
 document.getElementById('newExpiry').addEventListener('input', function() {
     let v = this.value.replace(/\D/g, '').substring(0, 4);
     if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
     this.value = v;
+    if (v.length === 5) document.getElementById('newCvv').focus();
+});
+
+// Auto-advance CVV to PIN when 3 digits
+document.getElementById('newCvv').addEventListener('input', function() {
+    if (this.value.length >= 3) document.getElementById('newPin').focus();
 });
 
 saveCardBtn.addEventListener('click', async () => {
@@ -314,16 +375,31 @@ saveCardBtn.addEventListener('click', async () => {
     try {
         const encryptedData = await encryptData({ number, expiry, cvv }, pin);
         const cardType = document.querySelector('input[name="cardType"]:checked').value;
-        const newCard = { bankName, cardName, cardType, encryptedData };
-        if (holderName) newCard.holderName = holderName;
-        cards.push(newCard);
-        saveCards(cards);
-        sessionPin = pin;
-        // Remember holder name for next time (PIN is session-only, not stored)
-        if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
-        hideAddCardModal();
-        renderCards(searchInput.value);
-        showToast('✅ Card encrypted & saved!');
+        const updatedCard = { bankName, cardName, cardType, encryptedData };
+        if (holderName) updatedCard.holderName = holderName;
+
+        if (editingIndex !== null) {
+            // Edit mode — replace existing card
+            cards[editingIndex] = updatedCard;
+            revealedCards.delete(editingIndex);
+            delete decryptedCache[editingIndex];
+            editingIndex = null;
+            saveCards(cards);
+            sessionPin = pin;
+            if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
+            hideAddCardModal();
+            renderCards(searchInput.value);
+            showToast('✏️ Card updated!');
+        } else {
+            // Add mode — push new card
+            cards.push(updatedCard);
+            saveCards(cards);
+            sessionPin = pin;
+            if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
+            hideAddCardModal();
+            renderCards(searchInput.value);
+            showToast('✅ Card encrypted & saved!');
+        }
     } catch (err) {
         addCardError.textContent = '❌ Encryption failed: ' + err.message; addCardError.style.display = 'block';
     } finally {
@@ -513,5 +589,14 @@ function highlightMatch(text, query) {
 // ============================
 // 🚀 INIT
 // ============================
+
+// Type filter buttons
+document.querySelector('.type-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('.type-filter-btn');
+    if (!btn) return;
+    activeTypeFilter = btn.dataset.filter;
+    document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderCards(searchInput.value);
+});
 
 renderCards();
