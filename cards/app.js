@@ -345,7 +345,7 @@ document.querySelector('#addCardModal .modal-close').addEventListener('click', h
 addCardModal.addEventListener('click', e => { if (e.target === addCardModal) hideAddCardModal(); });
 
 function getNetworkLabel(network) {
-    const labels = { Visa: 'VISA', Mastercard: 'MC', RuPay: 'RuPay', Amex: 'AMEX', Diners: 'DINERS' };
+    const labels = { Visa: 'VISA', Mastercard: 'MC', RuPay: 'RuPay', Amex: 'AMEX', Diners: 'DINERS', JCB: 'JCB' };
     return labels[network] || '';
 }
 
@@ -355,6 +355,8 @@ function detectCardNetwork(number) {
     if (!n) return null;
     // Amex: 34, 37
     if (/^3[47]/.test(n)) return 'Amex';
+    // JCB: 3528-3589
+    if (/^35(2[89]|[3-8]\d)/.test(n)) return 'JCB';
     // Diners: 36, 38, 300-305
     if (/^(36|38|30[0-5])/.test(n)) return 'Diners';
     // RuPay: 60, 65, 81, 82, 508
