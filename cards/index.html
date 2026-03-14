@@ -67,7 +67,7 @@
             </div>
             <p class="modal-desc">Enter your secret PIN to reveal card details</p>
             <div class="pin-input-wrapper">
-                <input type="password" id="pinInput" placeholder="Enter PIN" maxlength="20" autocomplete="off">
+                <input type="password" id="pinInput" placeholder="Enter 4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             </div>
             <div id="pinError" class="pin-error" style="display:none;">❌ Incorrect PIN. Try again.</div>
             <button id="unlockBtn" class="unlock-btn">🔓 Unlock</button>
@@ -119,7 +119,7 @@
             </div>
             <div class="form-group">
                 <label>🔑 Your PIN (to encrypt this card)</label>
-                <input type="password" id="newPin" placeholder="Enter your secret PIN" autocomplete="off">
+                <input type="password" id="newPin" placeholder="Enter 4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             </div>
             <div id="addCardError" class="pin-error" style="display:none;"></div>
             <button id="saveCardBtn" class="unlock-btn save-btn">🔐 Encrypt & Save</button>
