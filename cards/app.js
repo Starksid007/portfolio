@@ -664,3 +664,24 @@ document.querySelector('.type-filters').addEventListener('click', (e) => {
 });
 
 renderCards();
+
+// ============================
+// 🌗 THEME TOGGLE
+// ============================
+
+const themeToggle = document.getElementById('themeToggle');
+const THEME_KEY = 'cardvault_theme';
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeToggle.textContent = theme === 'dark' ? '🌙' : '☀️';
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+// Load saved theme (default: dark)
+setTheme(localStorage.getItem(THEME_KEY) || 'dark');
+
+themeToggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+});
