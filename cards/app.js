@@ -243,6 +243,7 @@ function copyAllDetails(i, btnEl) {
 
 function showPinModal() {
     pinModal.style.display = 'flex'; pinInput.value = ''; pinError.style.display = 'none';
+    initBiometricButton();
     setTimeout(() => pinInput.focus(), 100);
 }
 function hidePinModal() {
@@ -258,6 +259,7 @@ unlockBtn.addEventListener('click', async () => {
         decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
         revealedCards.add(i); sessionPin = pin;
         hidePinModal(); renderCards(searchInput.value);
+        offerBiometricEnrollment(pin);
     } catch {
         sessionPin = null;
         pinError.textContent = '❌ Incorrect PIN. Try again.'; pinError.style.display = 'block';
@@ -664,6 +666,133 @@ document.querySelector('.type-filters').addEventListener('click', (e) => {
 });
 
 renderCards();
+
+// ============================
+// 🔐 BIOMETRIC UNLOCK (Face ID / Touch ID)
+// ============================
+
+const BIOMETRIC_PIN_KEY = 'cardvault_bio_pin';
+const BIOMETRIC_CRED_KEY = 'cardvault_bio_cred';
+
+function isBiometricAvailable() {
+    return window.PublicKeyCredential && window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+        ? window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        : Promise.resolve(false);
+}
+
+function hasBiometricSetup() {
+    return !!localStorage.getItem(BIOMETRIC_CRED_KEY) && !!localStorage.getItem(BIOMETRIC_PIN_KEY);
+}
+
+async function enrollBiometric(pin) {
+    try {
+        const available = await isBiometricAvailable();
+        if (!available) return;
+
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+        const userId = crypto.getRandomValues(new Uint8Array(16));
+
+        const credential = await navigator.credentials.create({
+            publicKey: {
+                challenge,
+                rp: { name: "Card Vault", id: window.location.hostname || 'localhost' },
+                user: { id: userId, name: "vault-user", displayName: "Card Vault User" },
+                pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+                authenticatorSelection: {
+                    authenticatorAttachment: "platform",
+                    userVerification: "required",
+                    residentKey: "preferred"
+                },
+                timeout: 60000
+            }
+        });
+
+        if (credential) {
+            // Store credential ID and PIN (PIN is needed for AES decryption)
+            const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+            localStorage.setItem(BIOMETRIC_CRED_KEY, credId);
+            // Lightly obfuscate PIN in storage
+            localStorage.setItem(BIOMETRIC_PIN_KEY, btoa(pin));
+            showToast('✅ Face ID / Touch ID enabled!');
+        }
+    } catch (err) {
+        console.log('Biometric enrollment skipped:', err.message);
+    }
+}
+
+async function authenticateWithBiometric() {
+    try {
+        const credId = localStorage.getItem(BIOMETRIC_CRED_KEY);
+        if (!credId) return null;
+
+        const rawId = Uint8Array.from(atob(credId), c => c.charCodeAt(0));
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+
+        const assertion = await navigator.credentials.get({
+            publicKey: {
+                challenge,
+                allowCredentials: [{ id: rawId, type: "public-key", transports: ["internal"] }],
+                userVerification: "required",
+                timeout: 60000
+            }
+        });
+
+        if (assertion) {
+            const storedPin = localStorage.getItem(BIOMETRIC_PIN_KEY);
+            return storedPin ? atob(storedPin) : null;
+        }
+    } catch (err) {
+        console.log('Biometric auth failed:', err.message);
+    }
+    return null;
+}
+
+// Offer biometric after successful PIN unlock
+async function offerBiometricEnrollment(pin) {
+    if (hasBiometricSetup()) return; // Already set up
+    const available = await isBiometricAvailable();
+    if (!available) return;
+    // Show a toast asking to enable — using a small delay so the card reveal shows first
+    setTimeout(() => {
+        if (confirm('🔐 Enable Face ID / Touch ID for quick unlock next time?')) {
+            enrollBiometric(pin);
+        }
+    }, 500);
+}
+
+// Show biometric button if available
+async function initBiometricButton() {
+    const bioBtn = document.getElementById('biometricBtn');
+    if (!bioBtn) return;
+    if (hasBiometricSetup()) {
+        bioBtn.style.display = 'block';
+    } else {
+        const available = await isBiometricAvailable();
+        bioBtn.style.display = available ? 'none' : 'none'; // Show only after enrollment
+    }
+}
+
+// Biometric button click handler
+document.getElementById('biometricBtn').addEventListener('click', async () => {
+    const bioBtn = document.getElementById('biometricBtn');
+    bioBtn.textContent = '⏳ Verifying...'; bioBtn.disabled = true;
+    const pin = await authenticateWithBiometric();
+    bioBtn.textContent = '🫥 Unlock with Face ID'; bioBtn.disabled = false;
+    if (pin && pendingRevealIndex !== null) {
+        try {
+            const i = pendingRevealIndex;
+            decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
+            revealedCards.add(i); sessionPin = pin;
+            hidePinModal(); renderCards(searchInput.value);
+        } catch {
+            pinError.textContent = '❌ Biometric PIN failed. Enter PIN manually.';
+            pinError.style.display = 'block';
+        }
+    } else if (!pin) {
+        pinError.textContent = '❌ Biometric verification failed.';
+        pinError.style.display = 'block';
+    }
+});
 
 // ============================
 // 🌗 THEME TOGGLE
