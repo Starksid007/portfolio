@@ -241,9 +241,32 @@ function copyAllDetails(i, btnEl) {
     });
 }
 
-function showPinModal() {
+async function showPinModal() {
     pinModal.style.display = 'flex'; pinInput.value = ''; pinError.style.display = 'none';
-    initBiometricButton();
+
+    // Auto-trigger biometric if enrolled
+    if (hasBiometricSetup()) {
+        pinError.textContent = '🔐 Verifying biometric...';
+        pinError.style.display = 'block'; pinError.style.color = 'var(--text-secondary)';
+        const pin = await authenticateWithBiometric();
+        pinError.style.color = ''; // reset
+        if (pin && pendingRevealIndex !== null) {
+            try {
+                const i = pendingRevealIndex;
+                decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
+                revealedCards.add(i); sessionPin = pin;
+                hidePinModal(); renderCards(searchInput.value);
+                return; // Success — no need to show modal
+            } catch {
+                pinError.textContent = '❌ Biometric PIN mismatch. Enter PIN manually.';
+                pinError.style.display = 'block';
+            }
+        } else {
+            pinError.textContent = '❌ Biometric failed. Enter PIN manually.';
+            pinError.style.display = 'block';
+        }
+    }
+
     setTimeout(() => pinInput.focus(), 100);
 }
 function hidePinModal() {
