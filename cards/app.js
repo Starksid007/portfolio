@@ -345,7 +345,7 @@ document.querySelector('#addCardModal .modal-close').addEventListener('click', h
 addCardModal.addEventListener('click', e => { if (e.target === addCardModal) hideAddCardModal(); });
 
 function getNetworkLabel(network) {
-    const labels = { Visa: 'VISA', Mastercard: 'MC', RuPay: 'RuPay', Amex: 'AMEX', Diners: 'DINERS', JCB: 'RuPay JCB' };
+    const labels = { Visa: 'VISA', Mastercard: 'Mastercard', RuPay: 'RuPay', Amex: 'AMEX', Diners: 'DINERS', JCB: 'RuPay JCB' };
     return labels[network] || '';
 }
 
