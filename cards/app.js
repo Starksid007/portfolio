@@ -147,7 +147,7 @@ function renderCards(filter = '') {
                     </div>
                 </div>
                 ${card.holderName ? `<div class="holder-name">${escapeHtml(card.holderName)}</div>` : ''}
-                <div class="card-network-badge">${escapeHtml(card.cardNetwork || 'Visa')}</div>
+                <div class="card-network-badge">${escapeHtml(getNetworkLabel(card.cardNetwork || 'Visa') || card.cardNetwork || 'Visa')}</div>
             </div>
             <div class="card-action-row">
                 ${shown
