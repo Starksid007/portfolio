@@ -263,6 +263,10 @@ unlockBtn.addEventListener('click', async () => {
         pinInput.value = ''; pinInput.focus();
     }
 });
+// Force numeric-only on PIN inputs
+[pinInput, document.getElementById('newPin')].forEach(el => {
+    el.addEventListener('input', function() { this.value = this.value.replace(/\D/g, ''); });
+});
 pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') unlockBtn.click(); });
 document.querySelector('#pinModal .modal-close').addEventListener('click', hidePinModal);
 pinModal.addEventListener('click', e => { if (e.target === pinModal) hidePinModal(); });
@@ -365,8 +369,8 @@ saveCardBtn.addEventListener('click', async () => {
     if (number.length < 13) {
         addCardError.textContent = '❌ Card number too short.'; addCardError.style.display = 'block'; return;
     }
-    if (pin.length < 3) {
-        addCardError.textContent = '❌ PIN must be at least 3 characters.'; addCardError.style.display = 'block'; return;
+    if (!/^\d{4}$/.test(pin)) {
+        addCardError.textContent = '❌ PIN must be exactly 4 digits.'; addCardError.style.display = 'block'; return;
     }
 
     addCardError.style.display = 'none';
