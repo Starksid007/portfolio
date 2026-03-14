@@ -147,7 +147,7 @@ function renderCards(filter = '') {
                     </div>
                 </div>
                 ${card.holderName ? `<div class="holder-name">${escapeHtml(card.holderName)}</div>` : ''}
-                <div class="card-network-badge">${escapeHtml(getNetworkLabel(card.cardNetwork || 'Visa') || card.cardNetwork || 'Visa')}</div>
+                <div class="card-network-badge">${getNetworkIcon(card.cardNetwork || 'Visa')}</div>
             </div>
             <div class="card-action-row">
                 ${shown
@@ -331,7 +331,7 @@ async function openEditCard(i) {
     const editNetwork = card.cardNetwork || detectCardNetwork(dec.number) || '';
     const editIconEl = document.getElementById('networkIcon');
     if (editNetwork) {
-        editIconEl.textContent = getNetworkLabel(editNetwork);
+        editIconEl.innerHTML = getNetworkIcon(editNetwork);
         editIconEl.className = 'network-icon visible';
     }
     document.getElementById('newExpiry').value = dec.expiry;
@@ -347,6 +347,19 @@ addCardModal.addEventListener('click', e => { if (e.target === addCardModal) hid
 function getNetworkLabel(network) {
     const labels = { Visa: 'VISA', Mastercard: 'Mastercard', RuPay: 'RuPay', Amex: 'AMEX', Diners: 'DINERS', JCB: 'RuPay JCB' };
     return labels[network] || '';
+}
+
+// SVG icons for card networks (used on card display)
+function getNetworkIcon(network) {
+    const icons = {
+        Visa: `<svg viewBox="0 0 48 16" class="network-svg"><text x="24" y="13" font-size="16" font-weight="900" font-style="italic" fill="#1a1f71" font-family="Arial,sans-serif" text-anchor="middle">VISA</text></svg>`,
+        Mastercard: `<svg viewBox="0 0 40 24" class="network-svg"><circle cx="14" cy="12" r="10" fill="#eb001b" opacity="0.9"/><circle cx="26" cy="12" r="10" fill="#f79e1b" opacity="0.9"/><path d="M20 4.6a10 10 0 010 14.8 10 10 0 000-14.8z" fill="#ff5f00"/></svg>`,
+        RuPay: `<svg viewBox="0 0 60 20" class="network-svg"><text x="30" y="15" font-size="14" font-weight="800" font-family="Arial,sans-serif" text-anchor="middle"><tspan fill="#097A44">Ru</tspan><tspan fill="#F37021">Pay</tspan></text></svg>`,
+        Amex: `<svg viewBox="0 0 48 16" class="network-svg"><rect width="48" height="16" rx="3" fill="#006FCF"/><text x="24" y="12" font-size="10" font-weight="800" fill="white" text-anchor="middle" font-family="Arial,sans-serif">AMEX</text></svg>`,
+        Diners: `<svg viewBox="0 0 24 24" class="network-svg"><circle cx="12" cy="12" r="11" fill="none" stroke="#004B87" stroke-width="2"/><circle cx="12" cy="12" r="7" fill="#004B87"/><rect x="6" y="11" width="12" height="2" rx="1" fill="white"/></svg>`,
+        JCB: `<svg viewBox="0 0 80 20" class="network-svg"><text x="40" y="15" font-size="13" font-weight="800" font-family="Arial,sans-serif" text-anchor="middle"><tspan fill="#097A44">RuPay</tspan><tspan fill="#004B87" font-size="11"> JCB</tspan></text></svg>`
+    };
+    return icons[network] || `<span class="network-text-fallback">${escapeHtml(getNetworkLabel(network))}</span>`;
 }
 
 // Detect card network from BIN (first digits) — same as real payment apps
@@ -373,14 +386,14 @@ document.getElementById('newCardNumber').addEventListener('input', function() {
     let v = this.value.replace(/\D/g, '').substring(0, 16);
     this.value = v.replace(/(.{4})/g, '$1 ').trim();
 
-    // Auto-detect and show network icon
+    // Auto-detect and show network SVG icon
     const detected = detectCardNetwork(v);
     const iconEl = document.getElementById('networkIcon');
     if (detected) {
-        iconEl.textContent = getNetworkLabel(detected);
+        iconEl.innerHTML = getNetworkIcon(detected);
         iconEl.className = 'network-icon visible';
     } else {
-        iconEl.textContent = '';
+        iconEl.innerHTML = '';
         iconEl.className = 'network-icon';
     }
 
