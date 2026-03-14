@@ -147,6 +147,7 @@ function renderCards(filter = '') {
                     </div>
                 </div>
                 ${card.holderName ? `<div class="holder-name">${escapeHtml(card.holderName)}</div>` : ''}
+                <div class="card-network-badge">${escapeHtml(card.cardNetwork || 'Visa')}</div>
             </div>
             <div class="card-action-row">
                 ${shown
@@ -283,6 +284,8 @@ addCardBtn.addEventListener('click', () => {
     document.getElementById('newBankName').value = '';
     document.getElementById('newCardName').value = '';
     document.querySelector('input[name="cardType"][value="Credit Card"]').checked = true;
+    document.getElementById('networkIcon').textContent = '';
+    document.getElementById('networkIcon').className = 'network-icon';
     // Pre-fill holder name from localStorage (persists across sessions)
     document.getElementById('newHolderName').value = localStorage.getItem(HOLDER_KEY) || '';
     document.getElementById('newCardNumber').value = '';
@@ -324,6 +327,13 @@ async function openEditCard(i) {
     if (typeRadio) typeRadio.checked = true;
     document.getElementById('newHolderName').value = card.holderName || '';
     document.getElementById('newCardNumber').value = formatCardNumber(dec.number);
+    // Show detected network icon for edit
+    const editNetwork = card.cardNetwork || detectCardNetwork(dec.number) || '';
+    const editIconEl = document.getElementById('networkIcon');
+    if (editNetwork) {
+        editIconEl.textContent = getNetworkLabel(editNetwork);
+        editIconEl.className = 'network-icon visible';
+    }
     document.getElementById('newExpiry').value = dec.expiry;
     document.getElementById('newCvv').value = dec.cvv;
     document.getElementById('newPin').value = sessionPin || '';
@@ -334,10 +344,44 @@ function hideAddCardModal() { addCardModal.style.display = 'none'; }
 document.querySelector('#addCardModal .modal-close').addEventListener('click', hideAddCardModal);
 addCardModal.addEventListener('click', e => { if (e.target === addCardModal) hideAddCardModal(); });
 
-// Auto-format card number → auto-advance to expiry when 16 digits
+function getNetworkLabel(network) {
+    const labels = { Visa: 'VISA', Mastercard: 'MC', RuPay: 'RuPay', Amex: 'AMEX', Diners: 'DINERS' };
+    return labels[network] || '';
+}
+
+// Detect card network from BIN (first digits) — same as real payment apps
+function detectCardNetwork(number) {
+    const n = number.replace(/\D/g, '');
+    if (!n) return null;
+    // Amex: 34, 37
+    if (/^3[47]/.test(n)) return 'Amex';
+    // Diners: 36, 38, 300-305
+    if (/^(36|38|30[0-5])/.test(n)) return 'Diners';
+    // RuPay: 60, 65, 81, 82, 508
+    if (/^(60|65|81|82|508)/.test(n)) return 'RuPay';
+    // Mastercard: 51-55, 2221-2720
+    if (/^5[1-5]/.test(n) || /^2[2-7]/.test(n)) return 'Mastercard';
+    // Visa: 4
+    if (/^4/.test(n)) return 'Visa';
+    return null;
+}
+
+// Auto-format card number → auto-detect network → auto-advance to expiry when 16 digits
 document.getElementById('newCardNumber').addEventListener('input', function() {
     let v = this.value.replace(/\D/g, '').substring(0, 16);
     this.value = v.replace(/(.{4})/g, '$1 ').trim();
+
+    // Auto-detect and show network icon
+    const detected = detectCardNetwork(v);
+    const iconEl = document.getElementById('networkIcon');
+    if (detected) {
+        iconEl.textContent = getNetworkLabel(detected);
+        iconEl.className = 'network-icon visible';
+    } else {
+        iconEl.textContent = '';
+        iconEl.className = 'network-icon';
+    }
+
     if (v.length === 16) document.getElementById('newExpiry').focus();
 });
 
@@ -379,7 +423,8 @@ saveCardBtn.addEventListener('click', async () => {
     try {
         const encryptedData = await encryptData({ number, expiry, cvv }, pin);
         const cardType = document.querySelector('input[name="cardType"]:checked').value;
-        const updatedCard = { bankName, cardName, cardType, encryptedData };
+        const cardNetwork = detectCardNetwork(number) || 'Visa';
+        const updatedCard = { bankName, cardName, cardType, cardNetwork, encryptedData };
         if (holderName) updatedCard.holderName = holderName;
 
         if (editingIndex !== null) {
