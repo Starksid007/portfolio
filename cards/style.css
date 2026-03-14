@@ -297,6 +297,47 @@ footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ===== 🌗 LIGHT MODE ===== */
+[data-theme="light"] {
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --accent: #e94560;
+    --accent-glow: rgba(233, 69, 96, 0.2);
+    --text-primary: #1a1a2e;
+    --text-secondary: #555;
+    --text-muted: #888;
+    --border: #ddd;
+    --success: #00a854;
+    --gold: #c89a20;
+}
+[data-theme="light"] .credit-card {
+    background: linear-gradient(145deg, #fff, #f5f7fa);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .credit-card:hover {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+[data-theme="light"] #searchInput { background: #fff; }
+[data-theme="light"] .modal { background: #fff; }
+[data-theme="light"] .form-group input { background: #f5f7fa; }
+[data-theme="light"] .toast { background: var(--success); color: #fff; }
+[data-theme="light"] .detail-value { color: #888; }
+[data-theme="light"] .detail-value.revealed { color: #1a1a2e; }
+[data-theme="light"] .card-type-badge.credit { background: rgba(233, 69, 96, 0.1); }
+[data-theme="light"] .card-type-badge.debit { background: rgba(0, 168, 84, 0.1); }
+[data-theme="light"] .radio-label { background: #f5f7fa; }
+
+/* Theme Toggle Button */
+.theme-toggle {
+    background: none; border: 1.5px solid var(--border); color: var(--text-muted);
+    width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem;
+    cursor: pointer; transition: all 0.3s; display: flex;
+    align-items: center; justify-content: center; position: fixed;
+    top: 1rem; right: 1rem; z-index: 100;
+}
+.theme-toggle:hover { border-color: var(--gold); color: var(--gold); background: rgba(200, 154, 32, 0.1); }
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
     .container { padding: 1.2rem 1rem; }
@@ -304,4 +345,13 @@ footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 
     .card-number-display { font-size: 1rem; letter-spacing: 2px; }
     .action-bar { flex-direction: column; align-items: stretch; }
     .action-right { justify-content: center; }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
