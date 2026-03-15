@@ -187,7 +187,7 @@ footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 
     background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 2rem; width: 90%; max-width: 380px; text-align: center; animation: slideUp 0.3s ease;
 }
-.modal-wide { max-width: 480px; text-align: left; }
+.modal-wide { max-width: 480px; text-align: left; max-height: 90vh; overflow-y: auto; }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
 .modal-header h2 { font-size: 1.3rem; }
