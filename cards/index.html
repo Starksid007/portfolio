@@ -122,6 +122,14 @@
                 </div>
             </div>
             <div class="form-group">
+                <label>Credit Limit <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+                <input type="text" id="newCreditLimit" placeholder="e.g., 3,00,000" autocomplete="off">
+            </div>
+            <div class="form-group" id="sharedLimitGroup">
+                <label>Shares Limit With <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">(same bank cards)</span></label>
+                <div id="sharedCardsContainer" style="min-height:32px;padding:6px 0;color:var(--text-muted);font-size:0.85rem;">No same-bank cards found</div>
+            </div>
+            <div class="form-group">
                 <label>🔑 Your PIN (to encrypt this card)</label>
                 <input type="password" id="newPin" placeholder="Enter 4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             </div>
