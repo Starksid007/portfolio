@@ -105,6 +105,16 @@ function formatCardNumber(num) {
     return num.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
+// Format number in Indian style: 3,00,000
+function formatIndianNumber(num) {
+    const n = String(num).replace(/\D/g, '');
+    if (!n) return '';
+    const last3 = n.slice(-3);
+    const rest = n.slice(0, -3);
+    if (!rest) return last3;
+    return rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
+}
+
 function renderCards(filter = '') {
     const q = filter.toLowerCase().trim();
     let count = 0;
@@ -146,6 +156,7 @@ function renderCards(filter = '') {
                         <span class="detail-value ${shown ? 'revealed' : ''}">${shown && dec ? dec.cvv : '•••'}</span>
                     </div>
                 </div>
+                ${card.creditLimit ? `<div class="detail-row" style="margin-top:0.5rem"><span class="detail-label">Limit</span><span class="detail-value limit-hidden" data-limit="₹${formatIndianNumber(card.creditLimit)}" style="font-weight:600;font-size:0.90rem;letter-spacing:1px;cursor:pointer" title="Click to reveal">••••••</span><button class="copy-btn" data-action="toggle-limit" style="display:inline-block;cursor:pointer;font-size:0.9rem" title="Show/Hide limit">👁</button></div>` : ''}
                 ${card.holderName ? `<div class="holder-name">${escapeHtml(card.holderName)}</div>` : ''}
                 <div class="card-network-badge">${getNetworkIcon(card.cardNetwork || 'Visa')}</div>
             </div>
@@ -162,9 +173,23 @@ function renderCards(filter = '') {
     const total = cards.length;
     const showing = count;
     const filtered = activeTypeFilter !== 'all' || q;
-    document.getElementById('cardCount').innerHTML = filtered
+    // Calculate total credit limit (shared groups counted once)
+    const seenGroups = new Set();
+    let totalLimit = 0;
+    cards.forEach(c => {
+        if (!c.creditLimit) return;
+        if (c.sharedLimitGroup) {
+            const grp = c.sharedLimitGroup.toLowerCase().trim();
+            if (seenGroups.has(grp)) return; // already counted
+            seenGroups.add(grp);
+        }
+        totalLimit += parseInt(c.creditLimit);
+    });
+    const limitHtml = totalLimit > 0 ? ` &nbsp;|&nbsp; Total Limit: <span style="color:var(--gold);font-weight:700">₹${formatIndianNumber(totalLimit)}</span>` : '';
+
+    document.getElementById('cardCount').innerHTML = (filtered
         ? `<span class="card-count-num">${showing}</span> of ${total} card${total !== 1 ? 's' : ''}`
-        : `<span class="card-count-num">${total}</span> card${total !== 1 ? 's' : ''}`;
+        : `<span class="card-count-num">${total}</span> card${total !== 1 ? 's' : ''}`) + limitHtml;
 }
 
 // Delegate click events on card grid
@@ -187,6 +212,22 @@ cardGrid.addEventListener('click', (e) => {
     else if (btn.dataset.action === 'delete') requestDelete(idx);
     else if (btn.dataset.action === 'copyall') copyAllDetails(idx, btn);
     else if (btn.dataset.action === 'edit') openEditCard(idx);
+    else if (btn.dataset.action === 'toggle-limit') {
+        const limitSpan = btn.parentElement.querySelector('.detail-value');
+        if (limitSpan.classList.contains('limit-hidden')) {
+            limitSpan.textContent = limitSpan.dataset.limit;
+            limitSpan.classList.remove('limit-hidden');
+            limitSpan.style.color = 'var(--gold)';
+            btn.textContent = '🙈';
+            btn.title = 'Hide limit';
+        } else {
+            limitSpan.textContent = '••••••';
+            limitSpan.classList.add('limit-hidden');
+            limitSpan.style.color = '';
+            btn.textContent = '👁';
+            btn.title = 'Show limit';
+        }
+    }
 });
 
 // ============================
@@ -233,6 +274,7 @@ function copyAllDetails(i, btnEl) {
         dec.cvv
     ];
     if (card.holderName) lines.push(card.holderName);
+    if (card.creditLimit) lines.push('Limit: ₹' + formatIndianNumber(card.creditLimit));
 
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
         btnEl.textContent = '✅';
@@ -316,6 +358,11 @@ addCardBtn.addEventListener('click', () => {
     document.getElementById('newCardNumber').value = '';
     document.getElementById('newExpiry').value = '';
     document.getElementById('newCvv').value = '';
+    document.getElementById('newCreditLimit').value = '';
+    creditLimitGroup.style.display = 'block'; // Credit Card is default, show limit
+    document.getElementById('sharedLimitGroup').style.display = 'block';
+    lastSharedBankName = '';
+    renderSharedCardsCheckboxes('');
     // Pre-fill PIN from current session only (not stored in localStorage)
     document.getElementById('newPin').value = sessionPin || '';
     setTimeout(() => document.getElementById('newBankName').focus(), 100);
@@ -361,6 +408,12 @@ async function openEditCard(i) {
     }
     document.getElementById('newExpiry').value = dec.expiry;
     document.getElementById('newCvv').value = dec.cvv;
+    document.getElementById('newCreditLimit').value = card.creditLimit ? formatIndianNumber(card.creditLimit) : '';
+    const isDebit = (card.cardType || 'Credit Card') === 'Debit Card';
+    creditLimitGroup.style.display = isDebit ? 'none' : 'block';
+    document.getElementById('sharedLimitGroup').style.display = isDebit ? 'none' : 'block';
+    lastSharedBankName = card.bankName;
+    renderSharedCardsCheckboxes(card.bankName);
     document.getElementById('newPin').value = sessionPin || '';
     setTimeout(() => document.getElementById('newBankName').focus(), 100);
 }
@@ -433,9 +486,99 @@ document.getElementById('newExpiry').addEventListener('input', function() {
     if (v.length === 5) document.getElementById('newCvv').focus();
 });
 
-// Auto-advance CVV to PIN when 3 digits
+// Auto-advance CVV to Credit Limit when 3 digits
 document.getElementById('newCvv').addEventListener('input', function() {
-    if (this.value.length >= 3) document.getElementById('newPin').focus();
+    if (this.value.length >= 3) document.getElementById('newCreditLimit').focus();
+});
+
+// Auto-format credit limit in Indian number style as you type
+document.getElementById('newCreditLimit').addEventListener('input', function() {
+    const raw = this.value.replace(/\D/g, '');
+    this.value = raw ? formatIndianNumber(raw) : '';
+});
+
+// Show/hide credit limit based on card type
+const creditLimitGroup = document.getElementById('newCreditLimit').closest('.form-group');
+document.querySelectorAll('input[name="cardType"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'Debit Card') {
+            creditLimitGroup.style.display = 'none';
+            document.getElementById('sharedLimitGroup').style.display = 'none';
+            document.getElementById('newCreditLimit').value = '';
+        } else {
+            creditLimitGroup.style.display = 'block';
+            document.getElementById('sharedLimitGroup').style.display = 'block';
+            renderSharedCardsCheckboxes(document.getElementById('newBankName').value.trim());
+        }
+    });
+});
+
+// ============================
+// 🔗 SHARED LIMIT CHECKBOXES
+// ============================
+
+function renderSharedCardsCheckboxes(bankName) {
+    const container = document.getElementById('sharedCardsContainer');
+    if (!bankName) { container.innerHTML = '<span style="color:var(--text-muted)">Enter bank name first</span>'; return; }
+
+    const sameBankCards = [];
+    cards.forEach((c, i) => {
+        if (i === editingIndex) return; // skip the card being edited
+        if (c.bankName.toLowerCase() === bankName.toLowerCase() && (c.cardType || 'Credit Card') === 'Credit Card') {
+            sameBankCards.push({ index: i, card: c });
+        }
+    });
+
+    if (sameBankCards.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-muted)">No other credit cards from this bank</span>';
+        return;
+    }
+
+    // Check which cards were previously linked (via sharedLimitGroup)
+    const currentCard = editingIndex !== null ? cards[editingIndex] : null;
+    const currentGroup = currentCard?.sharedLimitGroup || '';
+    const hasChecked = sameBankCards.some(({ card }) => currentGroup && card.sharedLimitGroup === currentGroup);
+
+    const checkboxes = sameBankCards.map(({ index, card }) => {
+        const checked = currentGroup && card.sharedLimitGroup === currentGroup ? 'checked' : '';
+        const limitStr = card.creditLimit ? ` (₹${formatIndianNumber(card.creditLimit)})` : '';
+        return `<label style="display:flex;align-items:center;gap:6px;padding:5px 4px;cursor:pointer;color:var(--text-secondary);font-size:0.85rem;">
+            <input type="checkbox" class="shared-card-cb" data-index="${index}" ${checked} style="accent-color:var(--accent);cursor:pointer;">
+            💳 ${escapeHtml(card.cardName)}${limitStr}
+        </label>`;
+    }).join('');
+
+    const expandId = 'sharedExpand_' + Date.now();
+    container.innerHTML = `<div>
+        <button type="button" id="${expandId}" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text-secondary);font-size:0.85rem;cursor:pointer;width:100%;text-align:left;transition:all 0.2s;">
+            ▶ 📋 ${sameBankCards.length} same-bank card${sameBankCards.length > 1 ? 's' : ''} — tap to expand
+        </button>
+        <div id="${expandId}_list" style="display:${hasChecked ? 'block' : 'none'};padding:6px 0 0 8px;">${checkboxes}</div>
+    </div>`;
+    // If pre-checked, show expanded text
+    const toggleBtn = document.getElementById(expandId);
+    const listDiv = document.getElementById(expandId + '_list');
+    if (hasChecked) toggleBtn.textContent = '▼ 📋 ' + sameBankCards.length + ' same-bank card' + (sameBankCards.length > 1 ? 's' : '');
+    toggleBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const isOpen = listDiv.style.display !== 'none';
+        listDiv.style.display = isOpen ? 'none' : 'block';
+        toggleBtn.textContent = (isOpen ? '▶' : '▼') + ' 📋 ' + sameBankCards.length + ' same-bank card' + (sameBankCards.length > 1 ? 's' : '') + (isOpen ? ' — tap to expand' : '');
+    });
+}
+
+// Refresh checkboxes when bank name changes (after dropdown selection or blur)
+// NOTE: bankInput is defined later — use deferred binding
+// Only re-render if bank name actually changed (to avoid collapsing <details>)
+let lastSharedBankName = '';
+document.getElementById('newBankName').addEventListener('blur', () => {
+    setTimeout(() => {
+        const current = document.getElementById('newBankName').value.trim();
+        if (current !== lastSharedBankName) {
+            lastSharedBankName = current;
+            renderSharedCardsCheckboxes(current);
+        }
+    }, 200);
 });
 
 saveCardBtn.addEventListener('click', async () => {
@@ -456,6 +599,16 @@ saveCardBtn.addEventListener('click', async () => {
     if (!/^\d{4}$/.test(pin)) {
         addCardError.textContent = '❌ PIN must be exactly 4 digits.'; addCardError.style.display = 'block'; return;
     }
+    const creditLimitVal = document.getElementById('newCreditLimit').value.replace(/\D/g, '').trim();
+    if (creditLimitVal) {
+        const limitNum = parseInt(creditLimitVal);
+        if (limitNum < 1000) {
+            addCardError.textContent = '❌ Credit limit must be at least ₹1,000.'; addCardError.style.display = 'block'; return;
+        }
+        if (limitNum > 10000000) {
+            addCardError.textContent = '❌ Credit limit cannot exceed ₹1,00,00,000.'; addCardError.style.display = 'block'; return;
+        }
+    }
 
     addCardError.style.display = 'none';
     saveCardBtn.disabled = true; saveCardBtn.textContent = '⏳ Encrypting...';
@@ -464,11 +617,31 @@ saveCardBtn.addEventListener('click', async () => {
         const encryptedData = await encryptData({ number, expiry, cvv }, pin);
         const cardType = document.querySelector('input[name="cardType"]:checked').value;
         const cardNetwork = detectCardNetwork(number) || 'Visa';
+        const creditLimitRaw = document.getElementById('newCreditLimit').value.replace(/\D/g, '').trim();
         const updatedCard = { bankName, cardName, cardType, cardNetwork, encryptedData };
         if (holderName) updatedCard.holderName = holderName;
+        if (creditLimitRaw) updatedCard.creditLimit = creditLimitRaw;
+
+        // Get checked shared-limit cards
+        const checkedBoxes = document.querySelectorAll('.shared-card-cb:checked');
+        const sharedIndices = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.index));
+
+        // If any cards are checked, create/use a shared group and sync limits
+        if (sharedIndices.length > 0 && creditLimitRaw) {
+            // Generate group ID from bank name
+            const groupId = 'shared_' + bankName.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+            // Check if linked cards already have a group — reuse it
+            const existingGroup = sharedIndices.map(idx => cards[idx].sharedLimitGroup).find(g => g) || groupId;
+
+            updatedCard.sharedLimitGroup = existingGroup;
+            // Sync limit and group to all checked cards
+            sharedIndices.forEach(idx => {
+                cards[idx].creditLimit = creditLimitRaw;
+                cards[idx].sharedLimitGroup = existingGroup;
+            });
+        }
 
         if (editingIndex !== null) {
-            // Edit mode — replace existing card
             cards[editingIndex] = updatedCard;
             revealedCards.delete(editingIndex);
             delete decryptedCache[editingIndex];
@@ -478,16 +651,17 @@ saveCardBtn.addEventListener('click', async () => {
             if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
             hideAddCardModal();
             renderCards(searchInput.value);
-            showToast('✏️ Card updated!');
+            const syncCount = sharedIndices.length;
+            showToast(syncCount > 0 ? `✏️ Card updated! Limit synced to ${syncCount} card(s).` : '✏️ Card updated!');
         } else {
-            // Add mode — push new card
             cards.push(updatedCard);
             saveCards(cards);
             sessionPin = pin;
             if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
             hideAddCardModal();
             renderCards(searchInput.value);
-            showToast('✅ Card encrypted & saved!');
+            const syncCount = sharedIndices.length;
+            showToast(syncCount > 0 ? `✅ Saved! Limit synced to ${syncCount} card(s).` : '✅ Card encrypted & saved!');
         }
     } catch (err) {
         addCardError.textContent = '❌ Encryption failed: ' + err.message; addCardError.style.display = 'block';
