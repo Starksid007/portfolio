@@ -407,6 +407,13 @@ async function fetchCoupons() {
     empty.style.display = 'none';
     error.style.display = 'none';
 
+    const progressBar = document.getElementById('couponProgressBar');
+    const progressText = document.getElementById('couponProgressText');
+    const progressDetail = document.getElementById('couponProgressDetail');
+    progressBar.style.width = '0%';
+    progressText.textContent = '⏳ Searching Gmail...';
+    progressDetail.textContent = '';
+
     try {
         const searchResult = await searchEmails(token);
         const messages = searchResult.messages || [];
@@ -417,16 +424,35 @@ async function fetchCoupons() {
             return;
         }
 
+        progressText.textContent = `📧 Found ${messages.length} emails. Reading...`;
+        progressBar.style.width = '5%';
+
         const allParsed = [];
-        for (const msg of messages) {
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
             try {
                 const { subject, body, rawHtml } = await getEmailBody(msg.id, token);
                 const parsed = parseCoupon(subject, body, rawHtml);
                 allParsed.push(parsed);
+
+                // Update progress AFTER fetch
+                const pct = 5 + Math.round(((i + 1) / messages.length) * 90);
+                progressBar.style.width = pct + '%';
+                progressText.textContent = `📨 ${i + 1} / ${messages.length} emails`;
+                const dateInfo = parsed.dateStr !== '—' ? formatCouponDate(parsed.dateStr) : '';
+                const catInfo = parsed.category !== '—' ? parsed.category : '';
+                progressDetail.textContent = [catInfo, dateInfo].filter(Boolean).join(' · ') || '';
+                // Ensure repaint: read offsetHeight to force layout, then wait 30ms
+                progressBar.offsetHeight;
+                await new Promise(r => setTimeout(r, 30));
             } catch (e) {
                 console.warn('Failed to parse email:', msg.id, e);
             }
         }
+
+        progressBar.style.width = '100%';
+        progressText.textContent = '✅ Processing complete!';
+        progressDetail.textContent = '';
 
         // Deduplicate by booking ID: prefer real coupon over pending
         const byBooking = new Map();
