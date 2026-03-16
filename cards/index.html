@@ -166,11 +166,11 @@
             </div>
             
             <div id="couponLoggedIn" style="display:none;">
-                <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem;">
-                    <span id="gmailUser" style="color:var(--text-secondary);font-size:0.85rem;">✅ Connected</span>
-                    <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:6px 16px;">🔍 Fetch Coupons</button>
-                    <button id="gmailLogoutBtn" class="action-btn cancel-btn" style="font-size:0.75rem;padding:5px 12px;">Logout</button>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+                    <span id="gmailUser" style="color:var(--text-secondary);font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✅ Connected</span>
+                    <button id="gmailLogoutBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.7rem;cursor:pointer;text-decoration:underline;flex-shrink:0;">Logout</button>
                 </div>
+                <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:8px 16px;width:100%;margin-bottom:0.8rem;">🔍 Fetch Coupons</button>
             </div>
 
             <div id="couponLoading" style="display:none;text-align:center;padding:1.5rem;color:var(--text-secondary);">
