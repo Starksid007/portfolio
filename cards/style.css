@@ -370,7 +370,20 @@ footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 
     header h1 { font-size: 1.7rem; }
     .card-number-display { font-size: 1rem; letter-spacing: 2px; }
     .action-bar { flex-direction: column; align-items: stretch; }
-    .action-right { justify-content: center; }
+    .action-right { justify-content: center; flex-wrap: wrap; }
+
+    /* Coupon modal mobile */
+    .modal-wide { max-width: 95vw !important; padding: 1.2rem !important; }
+    .modal-header h2 { font-size: 1.1rem; }
+    .coupon-table { font-size: 0.78rem; }
+    .coupon-table th { font-size: 0.6rem; padding: 6px 4px; }
+    .coupon-table td { padding: 8px 4px; }
+    .coupon-table code { font-size: 0.72rem !important; letter-spacing: 0 !important; padding: 2px 4px !important; word-break: break-all; }
+    .coupon-action-btn { font-size: 0.75rem; padding: 2px 5px; margin-left: 2px; }
+    .copy-coupon-btn { font-size: 0.8rem; padding: 1px 3px; }
+    /* Hide Booking column on mobile */
+    .coupon-table th:nth-child(3),
+    .coupon-table td:nth-child(3) { display: none; }
 }
 
 /* Reduce motion for accessibility */
