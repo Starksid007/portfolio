@@ -173,8 +173,12 @@
                 <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:8px 16px;width:100%;margin-bottom:0.8rem;">🔍 Fetch Coupons</button>
             </div>
 
-            <div id="couponLoading" style="display:none;text-align:center;padding:1.5rem;color:var(--text-secondary);">
-                ⏳ Searching Gmail for RuPay coupons...
+            <div id="couponLoading" style="display:none;padding:1.2rem 0;">
+                <div id="couponProgressText" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.5rem;">⏳ Searching Gmail...</div>
+                <div style="background:var(--border);border-radius:50px;height:8px;overflow:hidden;">
+                    <div id="couponProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:50px;transition:width 0.15s linear;"></div>
+                </div>
+                <div id="couponProgressDetail" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.4rem;"></div>
             </div>
 
             <div id="couponResults" style="display:none;">
