@@ -170,7 +170,10 @@
                     <span id="gmailUser" style="color:var(--text-secondary);font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✅ Connected</span>
                     <button id="gmailLogoutBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.7rem;cursor:pointer;text-decoration:underline;flex-shrink:0;">Logout</button>
                 </div>
-                <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:8px 16px;width:100%;margin-bottom:0.8rem;">🔍 Fetch Coupons</button>
+                <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
+                    <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:8px 16px;flex:1;">🔍 Fetch New</button>
+                    <button id="fullRefreshBtn" class="action-btn export-btn" style="font-size:0.75rem;padding:8px 12px;" title="Re-fetch all from last 30 days">🔄 Full</button>
+                </div>
             </div>
 
             <div id="couponLoading" style="display:none;padding:1.2rem 0;">
