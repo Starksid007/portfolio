@@ -11,6 +11,7 @@ const GMAIL_TOKEN_KEY = 'cardvault_gmail_token';
 const GMAIL_TOKEN_EXPIRY_KEY = 'cardvault_gmail_expiry';
 const USED_COUPONS_KEY = 'cardvault_used_coupons';
 const CACHED_COUPONS_KEY = 'cardvault_cached_coupons';
+const LAST_FETCH_TIME_KEY = 'cardvault_last_fetch_time';
 
 // ============================
 // ✅ USED COUPONS (localStorage)
@@ -160,14 +161,29 @@ async function getGmailProfile(token) {
     return gmailFetch('profile', token);
 }
 
-async function searchEmails(token) {
-    // Search for RuPay coupon emails from last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const afterDate = thirtyDaysAgo.toISOString().split('T')[0].replace(/-/g, '/');
+async function searchEmails(token, afterTimestamp) {
+    // afterTimestamp: epoch ms — if provided, search after that date; else last 30 days
+    let afterDate;
+    if (afterTimestamp) {
+        const d = new Date(afterTimestamp);
+        afterDate = d.toISOString().split('T')[0].replace(/-/g, '/');
+    } else {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        afterDate = thirtyDaysAgo.toISOString().split('T')[0].replace(/-/g, '/');
+    }
 
     const query = encodeURIComponent(`from:rupay@truztee.com subject:"Booking ID" after:${afterDate}`);
     return gmailFetch(`messages?q=${query}&maxResults=50`, token);
+}
+
+function getLastFetchTime() {
+    const t = localStorage.getItem(LAST_FETCH_TIME_KEY);
+    return t ? parseInt(t) : null;
+}
+
+function saveLastFetchTime() {
+    localStorage.setItem(LAST_FETCH_TIME_KEY, String(Date.now()));
 }
 
 async function getEmailBody(messageId, token) {
@@ -392,7 +408,14 @@ function updateCouponUI() {
     }
 }
 
-async function fetchCoupons() {
+// Helper: update progress bar with forced repaint
+function updateProgress(bar, textEl, detailEl, pct, text, detail) {
+    bar.style.width = pct + '%';
+    if (text) textEl.textContent = text;
+    if (detail !== undefined) detailEl.textContent = detail;
+}
+
+async function fetchCoupons(forceFullRefresh) {
     const token = getGmailToken();
     if (!token) { showCouponError('Not logged in. Please login first.'); return; }
 
@@ -400,7 +423,6 @@ async function fetchCoupons() {
     const results = document.getElementById('couponResults');
     const empty = document.getElementById('couponEmpty');
     const error = document.getElementById('couponError');
-    const tbody = document.getElementById('couponTableBody');
 
     loading.style.display = 'block';
     results.style.display = 'none';
@@ -410,13 +432,42 @@ async function fetchCoupons() {
     const progressBar = document.getElementById('couponProgressBar');
     const progressText = document.getElementById('couponProgressText');
     const progressDetail = document.getElementById('couponProgressDetail');
+    progressBar.style.transition = 'none'; // disable transition for instant updates
     progressBar.style.width = '0%';
+    progressBar.offsetHeight; // force reflow
+    progressBar.style.transition = 'width 0.15s linear';
     progressText.textContent = '⏳ Searching Gmail...';
     progressDetail.textContent = '';
 
+    // Decide: incremental or full refresh
+    const lastFetch = forceFullRefresh ? null : getLastFetchTime();
+    const isIncremental = !!lastFetch;
+    const existingCached = isIncremental ? loadCachedCoupons() : [];
+
+    if (isIncremental) {
+        const ago = formatTimestampDate(lastFetch);
+        progressDetail.textContent = `Incremental since ${ago}`;
+    } else {
+        progressDetail.textContent = 'Full scan — last 30 days';
+    }
+
     try {
-        const searchResult = await searchEmails(token);
+        const searchResult = await searchEmails(token, lastFetch);
         const messages = searchResult.messages || [];
+
+        if (messages.length === 0 && isIncremental) {
+            // No new emails — just show cached data
+            loading.style.display = 'none';
+            if (existingCached.length > 0) {
+                lastFetchedCoupons = existingCached;
+                renderCouponTable(existingCached);
+                saveLastFetchTime();
+                if (typeof showToast === 'function') showToast('✅ No new coupons — all up to date!');
+            } else {
+                empty.style.display = 'block';
+            }
+            return;
+        }
 
         if (messages.length === 0) {
             loading.style.display = 'none';
@@ -424,8 +475,9 @@ async function fetchCoupons() {
             return;
         }
 
-        progressText.textContent = `📧 Found ${messages.length} emails. Reading...`;
-        progressBar.style.width = '5%';
+        const label = isIncremental ? 'new emails' : 'emails';
+        updateProgress(progressBar, progressText, progressDetail, 5,
+            `📧 Found ${messages.length} ${label}. Reading...`, '');
 
         const allParsed = [];
         for (let i = 0; i < messages.length; i++) {
@@ -435,40 +487,39 @@ async function fetchCoupons() {
                 const parsed = parseCoupon(subject, body, rawHtml);
                 allParsed.push(parsed);
 
-                // Update progress AFTER fetch
+                // Update progress AFTER each email fetch
                 const pct = 5 + Math.round(((i + 1) / messages.length) * 90);
-                progressBar.style.width = pct + '%';
-                progressText.textContent = `📨 ${i + 1} / ${messages.length} emails`;
                 const dateInfo = parsed.dateStr !== '—' ? formatCouponDate(parsed.dateStr) : '';
                 const catInfo = parsed.category !== '—' ? parsed.category : '';
-                progressDetail.textContent = [catInfo, dateInfo].filter(Boolean).join(' · ') || '';
-                // Ensure repaint: read offsetHeight to force layout, then wait 30ms
-                progressBar.offsetHeight;
-                await new Promise(r => setTimeout(r, 30));
+                updateProgress(progressBar, progressText, progressDetail, pct,
+                    `📨 ${i + 1} / ${messages.length} ${label}`,
+                    [catInfo, dateInfo].filter(Boolean).join(' · '));
             } catch (e) {
                 console.warn('Failed to parse email:', msg.id, e);
             }
+            // Yield to browser for repaint
+            await new Promise(r => setTimeout(r, 0));
         }
 
-        progressBar.style.width = '100%';
-        progressText.textContent = '✅ Processing complete!';
-        progressDetail.textContent = '';
+        updateProgress(progressBar, progressText, progressDetail, 100, '✅ Processing complete!', '');
 
-        // Deduplicate by booking ID: prefer real coupon over pending
+        // Deduplicate: merge new results with cached (new takes priority)
         const byBooking = new Map();
+        // First add existing cached (if incremental)
+        for (const c of existingCached) {
+            byBooking.set(c.booking, c);
+        }
+        // Then add/overwrite with newly fetched (new coupon > pending)
         for (const p of allParsed) {
             const existing = byBooking.get(p.booking);
-            if (!existing) {
+            if (!existing || (p.coupon && !existing.coupon)) {
                 byBooking.set(p.booking, p);
-            } else {
-                // If current has a real coupon and existing is pending, replace
-                if (p.coupon && !existing.coupon) {
-                    byBooking.set(p.booking, p);
-                }
             }
         }
         const coupons = Array.from(byBooking.values());
 
+        // Small delay to let user see 100%
+        await new Promise(r => setTimeout(r, 300));
         loading.style.display = 'none';
 
         if (coupons.length === 0) {
@@ -476,11 +527,17 @@ async function fetchCoupons() {
             return;
         }
 
-        // Cache to localStorage and render
+        // Save fetch time, cache, and render
+        saveLastFetchTime();
         lastFetchedCoupons = coupons;
         saveCachedCoupons(coupons);
         renderCouponTable(coupons);
-        if (typeof showToast === 'function') showToast('🔄 Coupons updated!');
+
+        const newCount = allParsed.length;
+        const toastMsg = isIncremental
+            ? `🔄 ${newCount} new coupon${newCount !== 1 ? 's' : ''} added!`
+            : '🔄 Coupons updated!';
+        if (typeof showToast === 'function') showToast(toastMsg);
 
     } catch (err) {
         loading.style.display = 'none';
@@ -587,7 +644,8 @@ document.getElementById('setupClientIdBtn').addEventListener('click', () => {
 
 gmailLoginBtn.addEventListener('click', startGmailLogin);
 
-fetchCouponsBtn.addEventListener('click', fetchCoupons);
+fetchCouponsBtn.addEventListener('click', () => fetchCoupons(false));
+document.getElementById('fullRefreshBtn').addEventListener('click', () => fetchCoupons(true));
 
 gmailLogoutBtn.addEventListener('click', () => {
     clearGmailToken();
