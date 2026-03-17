@@ -12,6 +12,24 @@ const GMAIL_TOKEN_EXPIRY_KEY = 'cardvault_gmail_expiry';
 const USED_COUPONS_KEY = 'cardvault_used_coupons';
 const CACHED_COUPONS_KEY = 'cardvault_cached_coupons';
 const LAST_FETCH_TIME_KEY = 'cardvault_last_fetch_time';
+const COUPON_RANGE_KEY = 'cardvault_coupon_range';
+const FETCH_RANGE_KEY = 'cardvault_fetch_range';
+
+function getSelectedMonths() {
+    return parseInt(localStorage.getItem(COUPON_RANGE_KEY) || '1');
+}
+
+function setSelectedMonths(m) {
+    localStorage.setItem(COUPON_RANGE_KEY, String(m));
+}
+
+function getFetchRangeMonths() {
+    return parseInt(localStorage.getItem(FETCH_RANGE_KEY) || '1');
+}
+
+function setFetchRangeMonths(m) {
+    localStorage.setItem(FETCH_RANGE_KEY, String(m));
+}
 
 // ============================
 // ✅ USED COUPONS (localStorage)
@@ -22,11 +40,11 @@ function getUsedCoupons() {
         const raw = localStorage.getItem(USED_COUPONS_KEY);
         if (!raw) return {};
         const data = JSON.parse(raw);
-        // Auto-cleanup: remove entries older than 3 months
-        const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+        // Auto-cleanup: remove entries older than 1 year
+        const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
         let changed = false;
         for (const bookingId in data) {
-            if (data[bookingId].usedAt < threeMonthsAgo) {
+            if (data[bookingId].usedAt < oneYearAgo) {
                 delete data[bookingId];
                 changed = true;
             }
@@ -166,16 +184,31 @@ async function searchEmails(token, afterTimestamp) {
     // Gmail supports after:EPOCH_SECONDS for precise time filtering
     let afterParam;
     if (afterTimestamp) {
-        // Use epoch seconds for exact time precision (avoids re-fetching same-day emails)
         afterParam = Math.floor(afterTimestamp / 1000);
     } else {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        afterParam = Math.floor(thirtyDaysAgo.getTime() / 1000);
+        const months = getFetchRangeMonths();
+        const rangeStart = new Date();
+        rangeStart.setMonth(rangeStart.getMonth() - months);
+        afterParam = Math.floor(rangeStart.getTime() / 1000);
     }
 
     const query = encodeURIComponent(`from:rupay@truztee.com subject:"Booking ID" after:${afterParam}`);
-    return gmailFetch(`messages?q=${query}&maxResults=50`, token);
+    
+    // Paginate through all results (Gmail max 200 per page, supports nextPageToken)
+    let allMessages = [];
+    let pageToken = null;
+    let page = 0;
+    do {
+        page++;
+        let url = `messages?q=${query}&maxResults=200`;
+        if (pageToken) url += `&pageToken=${pageToken}`;
+        const result = await gmailFetch(url, token);
+        const msgs = result.messages || [];
+        allMessages = allMessages.concat(msgs);
+        pageToken = result.nextPageToken || null;
+    } while (pageToken && page < 10); // Safety cap: max 10 pages = 2000 emails
+
+    return { messages: allMessages };
 }
 
 function getLastFetchTime() {
@@ -462,7 +495,11 @@ async function fetchCoupons(forceFullRefresh) {
         const ago = formatTimestampDate(lastFetch, true);
         progressDetail.textContent = `Incremental since ${ago}`;
     } else {
-        progressDetail.textContent = 'Full scan — last 30 days';
+        const fetchMonths = getFetchRangeMonths();
+        const rangeDate = new Date();
+        rangeDate.setMonth(rangeDate.getMonth() - fetchMonths);
+        const rangeStr = rangeDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+        progressDetail.textContent = `Full scan — since ${rangeStr} (${fetchMonths}M)`;
     }
 
     try {
@@ -548,6 +585,20 @@ async function fetchCoupons(forceFullRefresh) {
             return;
         }
 
+        // Auto-mark coupons older than 2 months as used
+        const twoMonthsAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
+        const usedCoupons = getUsedCoupons();
+        let autoMarkedCount = 0;
+        for (const c of coupons) {
+            if (c.coupon && !usedCoupons[c.booking]) {
+                const couponDate = parseDateStr(c.dateStr);
+                if (couponDate > 0 && couponDate < twoMonthsAgo) {
+                    markCouponUsed(c.booking, c);
+                    autoMarkedCount++;
+                }
+            }
+        }
+
         // Save fetch time, cache, and render
         saveLastFetchTime();
         lastFetchedCoupons = coupons;
@@ -578,8 +629,9 @@ function renderCouponTable(coupons) {
 
     // Split into active and used (attach usedOn date)
     const active = sorted.filter(c => !usedCoupons[c.booking]);
-    const used = coupons.filter(c => usedCoupons[c.booking]).map(c => ({
+    const used = sorted.filter(c => usedCoupons[c.booking]).map(c => ({
         ...c,
+        _usedAt: usedCoupons[c.booking].usedAt,
         usedOn: formatTimestampDate(usedCoupons[c.booking].usedAt)
     }));
 
@@ -589,7 +641,13 @@ function renderCouponTable(coupons) {
         const couponCell = isPending
             ? `<span style="color:#c89a20;font-style:italic;font-weight:600;font-size:0.85rem;">⏳ Pending</span>`
             : `<code style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)'};padding:3px 8px;border-radius:4px;">${escapeHtmlCoupon(c.coupon)}</code>`;
-        const actionBtn = isPending ? '' : isUsed
+        const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const couponAge = parseDateStr(c.dateStr);
+        const isOlderThan1Month = couponAge > 0 && couponAge < oneMonthAgo;
+        const pendingAction = (isPending && !isUsed && isOlderThan1Month)
+            ? `<button class="coupon-action-btn mark-used-btn" data-booking="${escapeHtmlCoupon(c.booking)}" title="Mark as not available" style="font-size:0.7rem;">❌ N/A</button>`
+            : '';
+        const actionBtn = isPending ? pendingAction : isUsed
             ? `<button class="coupon-action-btn unmark-used-btn" data-booking="${escapeHtmlCoupon(c.booking)}" title="Mark as unused">↩️</button>`
             : `<button class="coupon-action-btn mark-used-btn" data-booking="${escapeHtmlCoupon(c.booking)}" title="Mark as used">✅</button>`;
         const copyBtn = (isPending || isUsed) ? '' : `<button class="copy-coupon-btn" data-code="${escapeHtmlCoupon(c.coupon)}" title="Copy">📋</button>`;
@@ -615,12 +673,28 @@ function renderCouponTable(coupons) {
     let html = active.map(c => buildRow(c, false)).join('');
 
     if (used.length > 0) {
+        // Filter used coupons by coupon date (date of issue), not when marked
+        const selectedMonths = getSelectedMonths();
+        const rangeMs = selectedMonths * 30 * 24 * 60 * 60 * 1000;
+        const cutoff = Date.now() - rangeMs;
+        const filteredUsed = used.filter(c => {
+            const couponDate = parseDateStr(c.dateStr);
+            return couponDate >= cutoff;
+        });
+
+        const rangeBtns = [1,3,6,12].map(m =>
+            `<button class="range-btn ${m === selectedMonths ? 'active' : ''}" data-months="${m}">${m}M</button>`
+        ).join('');
+
         html += `<tr><td colspan="5" style="padding:12px 0 6px;border:none;">
-            <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
-                ✅ Used (${used.length})
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
+                    ✅ Used (${filteredUsed.length})
+                </span>
+                <div style="display:flex;gap:4px;">${rangeBtns}</div>
             </div>
         </td></tr>`;
-        html += used.map(c => buildRow(c, true)).join('');
+        html += filteredUsed.map(c => buildRow(c, true)).join('');
     }
 
     tbody.innerHTML = html;
@@ -678,6 +752,14 @@ gmailLogoutBtn.addEventListener('click', () => {
 
 // Copy coupon code + Mark used / Unmark used
 document.getElementById('couponTableBody').addEventListener('click', (e) => {
+    // Range button clicks (inside Used heading)
+    const rangeBtn = e.target.closest('.range-btn');
+    if (rangeBtn) {
+        const months = parseInt(rangeBtn.dataset.months);
+        setSelectedMonths(months);
+        renderCouponTable(lastFetchedCoupons);
+        return;
+    }
     const copyBtn = e.target.closest('.copy-coupon-btn');
     if (copyBtn) {
         navigator.clipboard.writeText(copyBtn.dataset.code).then(() => {
@@ -706,8 +788,220 @@ document.getElementById('couponTableBody').addEventListener('click', (e) => {
     }
 });
 
+
+// Fetch range ⚙️ dropdown toggle
+const fetchRangeDropdown = document.getElementById('fetchRangeDropdown');
+document.getElementById('fetchRangeToggle').addEventListener('click', (e) => {
+    e.stopPropagation();
+    fetchRangeDropdown.style.display = fetchRangeDropdown.style.display === 'none' ? 'block' : 'none';
+});
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#fetchRangeDropdown') && !e.target.closest('#fetchRangeToggle')) {
+        fetchRangeDropdown.style.display = 'none';
+    }
+});
+// Fetch range button clicks inside dropdown
+fetchRangeDropdown.addEventListener('click', (e) => {
+    const btn = e.target.closest('.fetch-range-btn');
+    if (!btn) return;
+    const months = parseInt(btn.dataset.months);
+    setFetchRangeMonths(months);
+    fetchRangeDropdown.querySelectorAll('.fetch-range-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    localStorage.removeItem(LAST_FETCH_TIME_KEY);
+    fetchRangeDropdown.style.display = 'none';
+});
+
+// ============================
+// 📊 ANALYTICS
+// ============================
+
+// Category → worth mapping (case-insensitive matching)
+const COUPON_WORTH = {
+    'lakme': 1500,
+    'uber': 100,
+    'hotstar': 1500,
+    'disney': 1500,
+    'prime': 1500,
+    'amazon prime': 1500,
+    'zee5': 1500,
+    'sonyliv': 1500,
+    'sony liv': 1500,
+    'thyrocare': 1500,
+    'srl': 1500,
+    'srl diagnostic': 1500,
+    'apollo pharmacy': 250,
+    'apollo': 250,
+    'kalyan': 2000,
+    'kalyan jewellers': 2000,
+    'decathlon': 500,
+    'cult.fit': 1200,
+    'cultfit': 1200,
+    'cult': 1200,
+    'myntra': 500,
+    'nykaa': 500,
+    'bigbasket': 250,
+    'big basket': 250,
+    'jockey': 250,
+    'swiggy': 250,
+    'tata cliq': 500,
+    'tatacliq': 500,
+    'reliance digital': 500,
+    'blinkit': 250,
+};
+
+function getCouponWorth(category) {
+    if (!category || category === '—') return 0;
+    const cat = category.toLowerCase().trim();
+    // Exact match first
+    if (COUPON_WORTH[cat] !== undefined) return COUPON_WORTH[cat];
+    // Partial match
+    for (const [key, val] of Object.entries(COUPON_WORTH)) {
+        if (cat.includes(key) || key.includes(cat)) return val;
+    }
+    return 0;
+}
+
+function formatIndian(num) {
+    const n = String(num).replace(/\D/g, '');
+    if (!n) return '0';
+    const last3 = n.slice(-3);
+    const rest = n.slice(0, -3);
+    if (!rest) return last3;
+    return rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
+}
+
+function showAnalyticsModal() {
+    const modal = document.getElementById('analyticsModal');
+    modal.style.display = 'flex';
+    // Default range: earliest coupon → today
+    const allCoupons = lastFetchedCoupons || [];
+    if (allCoupons.length > 0) {
+        const dates = allCoupons.map(c => parseDateStr(c.dateStr)).filter(d => d > 0);
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date();
+        document.getElementById('analyticsFrom').value = minDate.toISOString().split('T')[0];
+        document.getElementById('analyticsTo').value = maxDate.toISOString().split('T')[0];
+        runAnalytics();
+    }
+}
+
+function runAnalytics() {
+    const fromDate = new Date(document.getElementById('analyticsFrom').value);
+    const toDate = new Date(document.getElementById('analyticsTo').value);
+    toDate.setHours(23, 59, 59, 999);
+    const allCoupons = lastFetchedCoupons || [];
+    const content = document.getElementById('analyticsContent');
+
+    if (isNaN(fromDate) || isNaN(toDate)) {
+        content.innerHTML = '<p style="color:var(--accent);text-align:center;">❌ Invalid date range</p>';
+        return;
+    }
+
+    // Filter coupons in date range (only those with actual coupon codes)
+    const filtered = allCoupons.filter(c => {
+        const d = parseDateStr(c.dateStr);
+        return d >= fromDate.getTime() && d <= toDate.getTime() && c.coupon;
+    });
+
+    if (filtered.length === 0) {
+        content.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:2rem 0;">No coupons found in this date range.</p>';
+        return;
+    }
+
+    // Group by category
+    const catMap = {};
+    let totalWorth = 0;
+    for (const c of filtered) {
+        const cat = c.category && c.category !== '—' ? c.category : 'Unknown';
+        if (!catMap[cat]) catMap[cat] = { count: 0, worth: 0 };
+        catMap[cat].count++;
+        const worth = getCouponWorth(cat);
+        catMap[cat].worth += worth;
+        totalWorth += worth;
+    }
+
+    // Sort by worth desc, then count desc
+    const categories = Object.entries(catMap).sort((a, b) => b[1].worth - a[1].worth || b[1].count - a[1].count);
+
+    // Build summary cards
+    let html = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.8rem;margin-bottom:1.2rem;">
+            <div class="analytics-card">
+                <div class="analytics-label">Total Coupons</div>
+                <div class="analytics-value" style="color:var(--accent);">${filtered.length}</div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-label">Categories</div>
+                <div class="analytics-value" style="color:var(--gold);">${categories.length}</div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-label">Total Worth</div>
+                <div class="analytics-value" style="color:var(--success);">₹${formatIndian(totalWorth)}</div>
+            </div>
+        </div>
+    `;
+
+    // Category breakdown table
+    html += `<table class="coupon-table" style="font-size:0.85rem;">
+        <thead><tr>
+            <th>Category</th>
+            <th style="text-align:center;">Count</th>
+            <th style="text-align:right;">Unit</th>
+            <th style="text-align:right;">Total</th>
+        </tr></thead><tbody>`;
+
+    for (const [cat, data] of categories) {
+        const unitWorth = getCouponWorth(cat);
+        const unitStr = unitWorth > 0 ? `₹${formatIndian(unitWorth)}` : '<span style="color:var(--text-muted);">—</span>';
+        const totalStr = data.worth > 0 ? `₹${formatIndian(data.worth)}` : '<span style="color:var(--text-muted);">—</span>';
+        html += `<tr>
+            <td style="font-weight:600;color:var(--text-primary);">${escapeHtmlCoupon(cat)}</td>
+            <td style="text-align:center;">${data.count}</td>
+            <td style="text-align:right;font-size:0.8rem;">${unitStr}</td>
+            <td style="text-align:right;font-weight:700;color:var(--success);">${totalStr}</td>
+        </tr>`;
+    }
+
+    html += `<tr style="border-top:2px solid var(--border);">
+        <td style="font-weight:800;color:var(--text-primary);">Total</td>
+        <td style="text-align:center;font-weight:700;">${filtered.length}</td>
+        <td></td>
+        <td style="text-align:right;font-weight:800;color:var(--gold);font-size:1rem;">₹${formatIndian(totalWorth)}</td>
+    </tr>`;
+    html += '</tbody></table>';
+
+    // Unknown worth notice
+    const unknownCats = categories.filter(([cat]) => getCouponWorth(cat) === 0);
+    if (unknownCats.length > 0) {
+        html += `<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.8rem;">⚠️ Worth not mapped for: ${unknownCats.map(([c]) => c).join(', ')}</p>`;
+    }
+
+    content.innerHTML = html;
+}
+
+// Analytics modal events
+document.getElementById('analyticsBtn').addEventListener('click', showAnalyticsModal);
+document.getElementById('analyticsClose').addEventListener('click', () => {
+    document.getElementById('analyticsModal').style.display = 'none';
+});
+document.getElementById('analyticsModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('analyticsModal')) document.getElementById('analyticsModal').style.display = 'none';
+});
+document.getElementById('analyticsApply').addEventListener('click', runAnalytics);
+
 // ============================
 // 🚀 INIT
 // ============================
 handleOAuthCallback();
 initCouponsTab();
+// Restore fetch range button from localStorage
+(function restoreFetchRange() {
+    const saved = getFetchRangeMonths();
+    const btn = document.querySelector(`.fetch-range-btn[data-months="${saved}"]`);
+    if (btn) {
+        document.querySelectorAll('.fetch-range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+})();
