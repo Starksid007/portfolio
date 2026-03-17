@@ -911,6 +911,9 @@ const COUPON_WORTH = {
     'tatacliq': 500,
     'reliance digital': 500,
     'blinkit': 250,
+    'four fountains': 1500,
+    'four fountains de-stress spa': 1500,
+    'gaana': 600,
 };
 
 function getCouponWorth(category) {
