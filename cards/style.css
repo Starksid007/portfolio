@@ -313,6 +313,24 @@ footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 
 .coupon-btn { background: transparent; color: var(--gold); border-color: var(--gold); }
 .coupon-btn:hover { background: rgba(240, 192, 64, 0.1); box-shadow: 0 0 12px rgba(240, 192, 64, 0.2); }
 
+/* ===== Range Buttons ===== */
+.range-btn, .fetch-range-btn {
+    padding: 4px 12px; border-radius: 50px; font-size: 0.7rem; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; border: 1.5px solid var(--border);
+    background: transparent; color: var(--text-muted); letter-spacing: 0.5px;
+}
+.range-btn:hover, .fetch-range-btn:hover { border-color: var(--text-secondary); color: var(--text-secondary); }
+.range-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(240, 192, 64, 0.1); }
+.fetch-range-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+
+/* ===== Analytics Cards ===== */
+.analytics-card {
+    background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 1rem; text-align: center;
+}
+.analytics-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 0.3rem; }
+.analytics-value { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
+
 /* ===== Coupon Table ===== */
 .coupon-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .coupon-table th {
