@@ -12,46 +12,109 @@
     <div class="container">
         <header>
             <h1>🔐 Card Vault</h1>
-            <p class="subtitle">Your encrypted card details</p>
+            <p class="subtitle">Your encrypted card details & coupons</p>
+            <!-- Tab Navigation -->
+            <nav class="tab-nav" id="tabNav">
+                <button class="tab-btn active" data-tab="cards">💳 Cards</button>
+                <button class="tab-btn" data-tab="coupons">🎫 Coupons</button>
+            </nav>
         </header>
 
-        <div class="search-wrapper">
-            <div class="search-box">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
-                <input type="text" id="searchInput" placeholder="Search by bank name or card name..." autocomplete="off">
-                <button id="clearSearch" class="clear-btn" title="Clear search">&times;</button>
+        <!-- ============ TAB: CARDS ============ -->
+        <div id="tabCards" class="tab-content active">
+            <div class="search-wrapper">
+                <div class="search-box">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search by bank name or card name..." autocomplete="off">
+                    <button id="clearSearch" class="clear-btn" title="Clear search">&times;</button>
+                </div>
+            </div>
+
+            <div class="action-bar">
+                <button id="addCardBtn" class="action-btn add-btn">➕ Add Card</button>
+                <div class="action-right">
+                    <button id="exportBtn" class="action-btn export-btn" title="Export cards">📤 Export</button>
+                    <button id="importBtn" class="action-btn import-btn" title="Import cards">📥 Import</button>
+                    <input type="file" id="importFile" accept=".json" style="display:none;">
+                </div>
+            </div>
+
+            <div class="card-count-bar">
+                <span id="cardCount"><span class="card-count-num">0</span> cards</span>
+                <div class="type-filters">
+                    <button class="type-filter-btn active" data-filter="all">All</button>
+                    <button class="type-filter-btn" data-filter="Credit Card">💳 Credit</button>
+                    <button class="type-filter-btn" data-filter="Debit Card">🏧 Debit</button>
+                </div>
+            </div>
+
+            <div id="cardGrid" class="card-grid"></div>
+
+            <div id="noResults" class="no-results" style="display:none;">
+                <p>😕 No cards found. Click ➕ Add Card to get started!</p>
             </div>
         </div>
 
-        <!-- Action buttons -->
-        <div class="action-bar">
-            <button id="addCardBtn" class="action-btn add-btn">➕ Add Card</button>
-            <div class="action-right">
-                <button id="couponBtn" class="action-btn coupon-btn" title="RuPay Coupons">🎫 Coupons</button>
-                <button id="exportBtn" class="action-btn export-btn" title="Export cards">📤 Export</button>
-                <button id="importBtn" class="action-btn import-btn" title="Import cards">📥 Import</button>
-                <input type="file" id="importFile" accept=".json" style="display:none;">
+        <!-- ============ TAB: COUPONS ============ -->
+        <div id="tabCoupons" class="tab-content">
+            <div class="coupon-section">
+                <p class="modal-desc" style="margin-bottom:1rem;">Fetch RuPay coupon codes from your Gmail</p>
+                
+                <div id="couponSetupSection" style="display:none;margin-bottom:1rem;">
+                    <div class="form-group" style="margin-bottom:0.6rem;">
+                        <label>⚙️ Gmail OAuth Client ID <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">(one-time setup)</span></label>
+                        <input type="text" id="gmailClientIdInput" placeholder="e.g., 913142...apps.googleusercontent.com" autocomplete="off" style="font-size:0.8rem;">
+                    </div>
+                    <button id="saveClientIdBtn" class="action-btn add-btn" style="font-size:0.8rem;padding:6px 16px;width:100%;">💾 Save Client ID</button>
+                </div>
+
+                <div id="couponAuthSection">
+                    <button id="gmailLoginBtn" class="unlock-btn" style="background:linear-gradient(135deg,#4285F4,#34A853);margin-bottom:0.5rem;max-width:400px;">
+                        <span style="font-size:1.1rem;">📧</span> Login with Gmail
+                    </button>
+                    <div style="text-align:center;">
+                        <button id="setupClientIdBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.75rem;cursor:pointer;text-decoration:underline;">⚙️ Change Gmail Client ID</button>
+                    </div>
+                </div>
+                
+                <div id="couponLoggedIn" style="display:none;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;max-width:400px;">
+                        <span id="gmailUser" style="color:var(--text-secondary);font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✅ Connected</span>
+                        <button id="gmailLogoutBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.7rem;cursor:pointer;text-decoration:underline;flex-shrink:0;">Logout</button>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;max-width:400px;">
+                        <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:8px 16px;flex:1;">� Fetch New</button>
+                        <button id="fullRefreshBtn" class="action-btn export-btn" style="font-size:0.75rem;padding:8px 12px;" title="Re-fetch all from last 30 days">🔄 Full</button>
+                    </div>
+                </div>
+
+                <div id="couponLoading" style="display:none;padding:1.2rem 0;max-width:500px;">
+                    <div id="couponProgressText" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.5rem;">⏳ Searching Gmail...</div>
+                    <div style="background:var(--border);border-radius:50px;height:8px;overflow:hidden;">
+                        <div id="couponProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:50px;transition:width 0.15s linear;"></div>
+                    </div>
+                    <div id="couponProgressDetail" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.4rem;"></div>
+                </div>
+
+                <div id="couponResults" style="display:none;">
+                    <div id="couponCount" style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:0.8rem;"></div>
+                    <div style="overflow-x:auto;">
+                        <table id="couponTable" class="coupon-table">
+                            <thead><tr><th>Category</th><th>Date</th><th>Booking</th><th>Coupon Code</th><th></th></tr></thead>
+                            <tbody id="couponTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="couponEmpty" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);">
+                    😕 No RuPay coupons found in the last 30 days.
+                </div>
+
+                <div id="couponError" style="display:none;color:var(--accent);font-size:0.85rem;margin-top:0.5rem;"></div>
             </div>
-        </div>
-
-        <div class="card-count-bar">
-            <span id="cardCount"><span class="card-count-num">0</span> cards</span>
-            <div class="type-filters">
-                <button class="type-filter-btn active" data-filter="all">All</button>
-                <button class="type-filter-btn" data-filter="Credit Card">💳 Credit</button>
-                <button class="type-filter-btn" data-filter="Debit Card">🏧 Debit</button>
-            </div>
-        </div>
-
-        <div id="cardGrid" class="card-grid">
-            <!-- Cards rendered by JS -->
-        </div>
-
-        <div id="noResults" class="no-results" style="display:none;">
-            <p>😕 No cards found. Click ➕ Add Card to get started!</p>
         </div>
 
         <footer>
@@ -136,69 +199,6 @@
             </div>
             <div id="addCardError" class="pin-error" style="display:none;"></div>
             <button id="saveCardBtn" class="unlock-btn save-btn">🔐 Encrypt & Save</button>
-        </div>
-    </div>
-
-    <!-- Coupon Modal -->
-    <div id="couponModal" class="modal-overlay" style="display:none;">
-        <div class="modal modal-wide" style="max-width:560px;">
-            <div class="modal-header">
-                <h2>🎫 RuPay Coupons</h2>
-                <button class="modal-close" id="couponModalClose">&times;</button>
-            </div>
-            <p class="modal-desc">Fetch coupon codes from your Gmail (RuPay emails)</p>
-            
-            <div id="couponSetupSection" style="display:none;margin-bottom:1rem;">
-                <div class="form-group" style="margin-bottom:0.6rem;">
-                    <label>⚙️ Gmail OAuth Client ID <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">(one-time setup)</span></label>
-                    <input type="text" id="gmailClientIdInput" placeholder="e.g., 913142...apps.googleusercontent.com" autocomplete="off" style="font-size:0.8rem;">
-                </div>
-                <button id="saveClientIdBtn" class="action-btn add-btn" style="font-size:0.8rem;padding:6px 16px;width:100%;">💾 Save Client ID</button>
-            </div>
-
-            <div id="couponAuthSection">
-                <button id="gmailLoginBtn" class="unlock-btn" style="background:linear-gradient(135deg,#4285F4,#34A853);margin-bottom:0.5rem;">
-                    <span style="font-size:1.1rem;">📧</span> Login with Gmail
-                </button>
-                <div style="text-align:center;">
-                    <button id="setupClientIdBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.75rem;cursor:pointer;text-decoration:underline;">⚙️ Change Gmail Client ID</button>
-                </div>
-            </div>
-            
-            <div id="couponLoggedIn" style="display:none;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
-                    <span id="gmailUser" style="color:var(--text-secondary);font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✅ Connected</span>
-                    <button id="gmailLogoutBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.7rem;cursor:pointer;text-decoration:underline;flex-shrink:0;">Logout</button>
-                </div>
-                <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
-                    <button id="fetchCouponsBtn" class="action-btn add-btn" style="font-size:0.85rem;padding:8px 16px;flex:1;">🔍 Fetch New</button>
-                    <button id="fullRefreshBtn" class="action-btn export-btn" style="font-size:0.75rem;padding:8px 12px;" title="Re-fetch all from last 30 days">🔄 Full</button>
-                </div>
-            </div>
-
-            <div id="couponLoading" style="display:none;padding:1.2rem 0;">
-                <div id="couponProgressText" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.5rem;">⏳ Searching Gmail...</div>
-                <div style="background:var(--border);border-radius:50px;height:8px;overflow:hidden;">
-                    <div id="couponProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:50px;transition:width 0.15s linear;"></div>
-                </div>
-                <div id="couponProgressDetail" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.4rem;"></div>
-            </div>
-
-            <div id="couponResults" style="display:none;">
-                <div id="couponCount" style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:0.8rem;"></div>
-                <div style="max-height:400px;overflow-y:auto;">
-                    <table id="couponTable" class="coupon-table">
-                        <thead><tr><th>Category</th><th>Date</th><th>Booking</th><th>Coupon Code</th><th></th></tr></thead>
-                        <tbody id="couponTableBody"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="couponEmpty" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);">
-                😕 No RuPay coupons found in the last 30 days.
-            </div>
-
-            <div id="couponError" style="display:none;color:var(--accent);font-size:0.85rem;margin-top:0.5rem;"></div>
         </div>
     </div>
 
