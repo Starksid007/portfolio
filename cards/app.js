@@ -1011,3 +1011,30 @@ themeToggle.addEventListener('click', () => {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
     setTheme(current === 'dark' ? 'light' : 'dark');
 });
+
+// ============================
+// 🗂️ TAB SWITCHING
+// ============================
+const TAB_KEY = 'cardvault_active_tab';
+document.getElementById('tabNav').addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    const tabId = btn.dataset.tab;
+    // Update buttons
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Update content
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const target = document.getElementById(tabId === 'cards' ? 'tabCards' : 'tabCoupons');
+    if (target) target.classList.add('active');
+    localStorage.setItem(TAB_KEY, tabId);
+    // When switching to coupons, update UI
+    if (tabId === 'coupons' && typeof updateCouponUI === 'function') updateCouponUI();
+});
+// Restore last active tab
+(function restoreTab() {
+    const saved = localStorage.getItem(TAB_KEY);
+    if (saved === 'coupons') {
+        document.querySelector('.tab-btn[data-tab="coupons"]')?.click();
+    }
+})();
