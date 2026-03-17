@@ -163,18 +163,18 @@ async function getGmailProfile(token) {
 }
 
 async function searchEmails(token, afterTimestamp) {
-    // afterTimestamp: epoch ms — if provided, search after that date; else last 30 days
-    let afterDate;
+    // Gmail supports after:EPOCH_SECONDS for precise time filtering
+    let afterParam;
     if (afterTimestamp) {
-        const d = new Date(afterTimestamp);
-        afterDate = d.toISOString().split('T')[0].replace(/-/g, '/');
+        // Use epoch seconds for exact time precision (avoids re-fetching same-day emails)
+        afterParam = Math.floor(afterTimestamp / 1000);
     } else {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        afterDate = thirtyDaysAgo.toISOString().split('T')[0].replace(/-/g, '/');
+        afterParam = Math.floor(thirtyDaysAgo.getTime() / 1000);
     }
 
-    const query = encodeURIComponent(`from:rupay@truztee.com subject:"Booking ID" after:${afterDate}`);
+    const query = encodeURIComponent(`from:rupay@truztee.com subject:"Booking ID" after:${afterParam}`);
     return gmailFetch(`messages?q=${query}&maxResults=50`, token);
 }
 
@@ -269,8 +269,8 @@ function parseHtmlEmail(html) {
     return fields;
 }
 
-// Format timestamp (ms) → "16th Mar"
-function formatTimestampDate(ts) {
+// Format timestamp (ms) → "16th Mar, 8:30 PM"
+function formatTimestampDate(ts, includeTime) {
     if (!ts) return '—';
     const d = new Date(ts);
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -279,7 +279,15 @@ function formatTimestampDate(ts) {
     const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
         : (day === 2 || day === 22) ? 'nd'
         : (day === 3 || day === 23) ? 'rd' : 'th';
-    return `${day}${suffix} ${month}`;
+    let result = `${day}${suffix} ${month}`;
+    if (includeTime) {
+        let h = d.getHours(), ampm = 'AM';
+        if (h >= 12) { ampm = 'PM'; if (h > 12) h -= 12; }
+        if (h === 0) h = 12;
+        const m = String(d.getMinutes()).padStart(2, '0');
+        result += `, ${h}:${m} ${ampm}`;
+    }
+    return result;
 }
 
 // Parse "16-Mar-2026" or "16-Mar-26" → Date object (for sorting)
@@ -451,7 +459,7 @@ async function fetchCoupons(forceFullRefresh) {
     const existingCached = isIncremental ? loadCachedCoupons() : [];
 
     if (isIncremental) {
-        const ago = formatTimestampDate(lastFetch);
+        const ago = formatTimestampDate(lastFetch, true);
         progressDetail.textContent = `Incremental since ${ago}`;
     } else {
         progressDetail.textContent = 'Full scan — last 30 days';
@@ -565,8 +573,11 @@ function renderCouponTable(coupons) {
     const tbody = document.getElementById('couponTableBody');
     const usedCoupons = getUsedCoupons();
 
+    // Sort all coupons by date descending (latest on top)
+    const sorted = [...coupons].sort((a, b) => parseDateStr(b.dateStr) - parseDateStr(a.dateStr));
+
     // Split into active and used (attach usedOn date)
-    const active = coupons.filter(c => !usedCoupons[c.booking]);
+    const active = sorted.filter(c => !usedCoupons[c.booking]);
     const used = coupons.filter(c => usedCoupons[c.booking]).map(c => ({
         ...c,
         usedOn: formatTimestampDate(usedCoupons[c.booking].usedAt)
