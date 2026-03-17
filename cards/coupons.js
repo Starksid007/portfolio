@@ -132,10 +132,11 @@ function handleOAuthCallback() {
             saveGmailToken(token, expiresIn);
             // Clean up URL hash
             history.replaceState(null, '', window.location.pathname + window.location.search);
-            // Auto-open coupon modal
+            // Auto-switch to coupons tab
             setTimeout(() => {
-                showCouponModal();
-                updateCouponUI();
+                const couponTabBtn = document.querySelector('.tab-btn[data-tab="coupons"]');
+                if (couponTabBtn) couponTabBtn.click();
+                initCouponsTab();
             }, 300);
         }
     }
@@ -281,6 +282,19 @@ function formatTimestampDate(ts) {
     return `${day}${suffix} ${month}`;
 }
 
+// Parse "16-Mar-2026" or "16-Mar-26" → Date object (for sorting)
+function parseDateStr(dateStr) {
+    if (!dateStr || dateStr === '—') return 0;
+    const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    const m = dateStr.match(/(\d{1,2})[- ](\w{3})[- ]?(\d{2,4})?/);
+    if (!m) return 0;
+    const day = parseInt(m[1]);
+    const mon = months[m[2].toLowerCase()] ?? 0;
+    let year = m[3] ? parseInt(m[3]) : new Date().getFullYear();
+    if (year < 100) year += 2000;
+    return new Date(year, mon, day).getTime();
+}
+
 // Format "16-Mar-2026" → "16th Mar"
 function formatCouponDate(dateStr) {
     if (!dateStr || dateStr === '—') return '—';
@@ -352,26 +366,18 @@ function parseCoupon(subject, body, rawHtml) {
 // 🎨 UI
 // ============================
 
-const couponModal = document.getElementById('couponModal');
-const couponBtn = document.getElementById('couponBtn');
-const couponModalClose = document.getElementById('couponModalClose');
 const gmailLoginBtn = document.getElementById('gmailLoginBtn');
 const fetchCouponsBtn = document.getElementById('fetchCouponsBtn');
 const gmailLogoutBtn = document.getElementById('gmailLogoutBtn');
 
-function showCouponModal() {
-    couponModal.style.display = 'flex';
+function initCouponsTab() {
     updateCouponUI();
-    // Immediately show cached coupons from localStorage
+    // Show cached coupons from localStorage
     const cached = loadCachedCoupons();
     if (cached.length > 0) {
         lastFetchedCoupons = cached;
         renderCouponTable(cached);
     }
-}
-
-function hideCouponModal() {
-    couponModal.style.display = 'none';
 }
 
 function updateCouponUI() {
@@ -518,6 +524,13 @@ async function fetchCoupons(forceFullRefresh) {
         }
         const coupons = Array.from(byBooking.values());
 
+        // Sort by date descending (latest on top)
+        coupons.sort((a, b) => {
+            const da = parseDateStr(a.dateStr);
+            const db = parseDateStr(b.dateStr);
+            return db - da; // descending
+        });
+
         // Small delay to let user see 100%
         await new Promise(r => setTimeout(r, 300));
         loading.style.display = 'none';
@@ -619,10 +632,6 @@ function escapeHtmlCoupon(str) {
 // 📋 EVENTS
 // ============================
 
-couponBtn.addEventListener('click', showCouponModal);
-couponModalClose.addEventListener('click', hideCouponModal);
-couponModal.addEventListener('click', e => { if (e.target === couponModal) hideCouponModal(); });
-
 // Save Client ID
 document.getElementById('saveClientIdBtn').addEventListener('click', () => {
     const input = document.getElementById('gmailClientIdInput');
@@ -687,6 +696,7 @@ document.getElementById('couponTableBody').addEventListener('click', (e) => {
 });
 
 // ============================
-// 🚀 INIT — Check OAuth callback
+// 🚀 INIT
 // ============================
 handleOAuthCallback();
+initCouponsTab();
