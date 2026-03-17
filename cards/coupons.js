@@ -192,7 +192,7 @@ async function searchEmails(token, afterTimestamp) {
         afterParam = Math.floor(rangeStart.getTime() / 1000);
     }
 
-    const query = encodeURIComponent(`from:rupay@truztee.com subject:"Booking ID" after:${afterParam}`);
+    const query = encodeURIComponent(`from:(rupay@truztee.com OR rupay@golftripz.com) subject:"Booking ID" after:${afterParam}`);
     
     // Paginate through all results (Gmail max 200 per page, supports nextPageToken)
     let allMessages = [];
@@ -531,23 +531,28 @@ async function fetchCoupons(forceFullRefresh) {
             `📧 Found ${messages.length} ${label}. Reading...`, '');
 
         const allParsed = [];
-        for (let i = 0; i < messages.length; i++) {
-            const msg = messages[i];
-            try {
-                const { subject, body, rawHtml } = await getEmailBody(msg.id, token);
-                const parsed = parseCoupon(subject, body, rawHtml);
-                allParsed.push(parsed);
-
-                // Update progress AFTER each email fetch
-                const pct = 5 + Math.round(((i + 1) / messages.length) * 90);
-                const dateInfo = parsed.dateStr !== '—' ? formatCouponDate(parsed.dateStr) : '';
-                const catInfo = parsed.category !== '—' ? parsed.category : '';
-                updateProgress(progressBar, progressText, progressDetail, pct,
-                    `📨 ${i + 1} / ${messages.length} ${label}`,
-                    [catInfo, dateInfo].filter(Boolean).join(' · '));
-            } catch (e) {
-                console.warn('Failed to parse email:', msg.id, e);
+        const BATCH_SIZE = 5; // Fetch 5 emails in parallel (~5x faster)
+        for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+            const batch = messages.slice(i, i + BATCH_SIZE);
+            const results = await Promise.allSettled(
+                batch.map(async (msg) => {
+                    const { subject, body, rawHtml } = await getEmailBody(msg.id, token);
+                    return parseCoupon(subject, body, rawHtml);
+                })
+            );
+            for (const r of results) {
+                if (r.status === 'fulfilled') allParsed.push(r.value);
             }
+            // Update progress after each batch
+            const done = Math.min(i + BATCH_SIZE, messages.length);
+            const pct = 5 + Math.round((done / messages.length) * 90);
+            const last = results.findLast(r => r.status === 'fulfilled');
+            const lastParsed = last?.value;
+            const dateInfo = lastParsed?.dateStr && lastParsed.dateStr !== '—' ? formatCouponDate(lastParsed.dateStr) : '';
+            const catInfo = lastParsed?.category && lastParsed.category !== '—' ? lastParsed.category : '';
+            updateProgress(progressBar, progressText, progressDetail, pct,
+                `📨 ${done} / ${messages.length} ${label}`,
+                [catInfo, dateInfo].filter(Boolean).join(' · '));
             // Yield to browser for repaint
             await new Promise(r => setTimeout(r, 0));
         }
