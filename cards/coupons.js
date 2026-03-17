@@ -187,12 +187,18 @@ async function searchEmails(token, afterTimestamp) {
         afterParam = Math.floor(afterTimestamp / 1000);
     } else {
         const months = getFetchRangeMonths();
-        const rangeStart = new Date();
-        rangeStart.setMonth(rangeStart.getMonth() - months);
-        afterParam = Math.floor(rangeStart.getTime() / 1000);
+        if (months === 0) {
+            // "All" — no date filter
+            afterParam = 0;
+        } else {
+            const rangeStart = new Date();
+            rangeStart.setMonth(rangeStart.getMonth() - months);
+            afterParam = Math.floor(rangeStart.getTime() / 1000);
+        }
     }
 
-    const query = encodeURIComponent(`from:(rupay@truztee.com OR rupay@golftripz.com) subject:"Booking ID" after:${afterParam}`);
+    const afterFilter = afterParam > 0 ? ` after:${afterParam}` : '';
+    const query = encodeURIComponent(`from:(rupay@truztee.com OR rupay@golftripz.com) subject:"Booking ID"${afterFilter}`);
     
     // Paginate through all results (Gmail max 200 per page, supports nextPageToken)
     let allMessages = [];
@@ -312,7 +318,8 @@ function formatTimestampDate(ts, includeTime) {
     const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
         : (day === 2 || day === 22) ? 'nd'
         : (day === 3 || day === 23) ? 'rd' : 'th';
-    let result = `${day}${suffix} ${month}`;
+    const yr = "'" + String(d.getFullYear()).slice(-2);
+    let result = `${day}${suffix} ${month} ${yr}`;
     if (includeTime) {
         let h = d.getHours(), ampm = 'AM';
         if (h >= 12) { ampm = 'PM'; if (h > 12) h -= 12; }
@@ -336,17 +343,23 @@ function parseDateStr(dateStr) {
     return new Date(year, mon, day).getTime();
 }
 
-// Format "16-Mar-2026" → "16th Mar"
+// Format "16-Mar-2026" → "16th Mar '26"
 function formatCouponDate(dateStr) {
     if (!dateStr || dateStr === '—') return '—';
-    const parts = dateStr.match(/(\d{1,2})[- ](\w+)/);
+    const parts = dateStr.match(/(\d{1,2})[- ](\w+)[- ]?(\d{2,4})?/);
     if (!parts) return dateStr;
     const day = parseInt(parts[1]);
     const month = parts[2];
+    let yearStr = '';
+    if (parts[3]) {
+        let yr = parseInt(parts[3]);
+        if (yr < 100) yr += 2000;
+        yearStr = " '" + String(yr).slice(-2);
+    }
     const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
         : (day === 2 || day === 22) ? 'nd'
         : (day === 3 || day === 23) ? 'rd' : 'th';
-    return `${day}${suffix} ${month}`;
+    return `${day}${suffix} ${month}${yearStr}`;
 }
 
 // ============================
@@ -390,10 +403,44 @@ function parseCoupon(subject, body, rawHtml) {
         if (!bookingMatch && fields['booking id']) booking = fields['booking id'];
     }
 
-    // Fallback to plain text parsing if HTML parsing failed
-    if (!coupon && !couponPending && body) {
-        const pinMatch = body.match(/(\d{10,}\/pin:\d+)/i);
-        if (pinMatch) coupon = pinMatch[1].trim();
+    // Fallback to plain text parsing (reply emails often have coupon in body text)
+    // This runs even if couponPending is true — because reply emails contain the actual code
+    // in the body while the quoted original email says "will be sent in 24-48 hours"
+    if (!coupon && body) {
+        // FIRST: Try specific pin pattern (most reliable — e.g., "1007620045528921/pin:2794")
+        const pinMatch = body.match(/(\d{8,}\/pin:\d+)/i);
+        if (pinMatch) {
+            coupon = pinMatch[1].trim();
+            couponPending = false;
+        }
+        // SECOND: Try alphanumeric codes (at least 6 chars, no common words)
+        if (!coupon) {
+            // Find ALL "Coupon Code:" occurrences and pick the one with an actual code
+            const allMatches = [...body.matchAll(/Coupon\s*Code\s*[:\-]\s*([^\n\r]{1,60})/gi)];
+            for (const m of allMatches) {
+                const val = m[1].trim().split(/\s+/)[0]; // take first word/token
+                if (val && val.length >= 5 && /[0-9]/.test(val) && !/will|sent|pending|hours|processing/i.test(val)) {
+                    coupon = val;
+                    couponPending = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Fallback: extract category from body text if not found in HTML table
+    if ((!category || category === '—') && body) {
+        const spMatch = body.match(/Service\s*Provider\s*[:\-]\s*(.+)/i);
+        if (spMatch) {
+            const sp = spMatch[1].trim().replace(/\s+/g, ' ');
+            if (sp && sp.length > 1) category = sp;
+        }
+    }
+
+    // Fallback: extract date from body text
+    if ((!dateStr || dateStr === '—') && body) {
+        const dateMatch = body.match(/Date\s*(?:of\s*Issue)?\s*[:\-]\s*(\d{1,2}[\-\s]\w{3}[\-\s]\d{2,4})/i);
+        if (dateMatch) dateStr = dateMatch[1].trim();
     }
 
     // Clean up coupon
@@ -496,10 +543,14 @@ async function fetchCoupons(forceFullRefresh) {
         progressDetail.textContent = `Incremental since ${ago}`;
     } else {
         const fetchMonths = getFetchRangeMonths();
-        const rangeDate = new Date();
-        rangeDate.setMonth(rangeDate.getMonth() - fetchMonths);
-        const rangeStr = rangeDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-        progressDetail.textContent = `Full scan — since ${rangeStr} (${fetchMonths}M)`;
+        if (fetchMonths === 0) {
+            progressDetail.textContent = 'Full scan — all time';
+        } else {
+            const rangeDate = new Date();
+            rangeDate.setMonth(rangeDate.getMonth() - fetchMonths);
+            const rangeStr = rangeDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            progressDetail.textContent = `Full scan — since ${rangeStr} (${fetchMonths}M)`;
+        }
     }
 
     try {
@@ -680,15 +731,21 @@ function renderCouponTable(coupons) {
     if (used.length > 0) {
         // Filter used coupons by coupon date (date of issue), not when marked
         const selectedMonths = getSelectedMonths();
-        const rangeMs = selectedMonths * 30 * 24 * 60 * 60 * 1000;
-        const cutoff = Date.now() - rangeMs;
-        const filteredUsed = used.filter(c => {
-            const couponDate = parseDateStr(c.dateStr);
-            return couponDate >= cutoff;
-        });
+        let filteredUsed;
+        if (selectedMonths === 0) {
+            filteredUsed = used; // Show all
+        } else {
+            const rangeMs = selectedMonths * 30 * 24 * 60 * 60 * 1000;
+            const cutoff = Date.now() - rangeMs;
+            filteredUsed = used.filter(c => {
+                const couponDate = parseDateStr(c.dateStr);
+                return couponDate >= cutoff;
+            });
+        }
 
-        const rangeBtns = [1,3,6,12].map(m =>
-            `<button class="range-btn ${m === selectedMonths ? 'active' : ''}" data-months="${m}">${m}M</button>`
+        const rangeOptions = [1,3,6,12,0];
+        const rangeBtns = rangeOptions.map(m =>
+            `<button class="range-btn ${m === selectedMonths ? 'active' : ''}" data-months="${m}">${m === 0 ? 'All' : m + 'M'}</button>`
         ).join('');
 
         html += `<tr><td colspan="5" style="padding:12px 0 6px;border:none;">
