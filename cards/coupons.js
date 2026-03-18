@@ -759,7 +759,7 @@ function renderCouponTable(coupons) {
         html += `<tr><td colspan="5" style="padding:28px 0 10px;border:none;">
             <div style="background:var(--bg-card);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:44px;">
                 <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
-                    ✅ Used (${filteredUsed.length})
+                    Used (${filteredUsed.length})
                 </span>
                 <div style="display:flex;gap:4px;">${rangeBtns}</div>
             </div>
