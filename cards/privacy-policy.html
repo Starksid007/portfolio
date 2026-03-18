@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — Card Vault</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f1a;
+            color: #c8c8d0;
+            line-height: 1.7;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #e94560;
+            font-size: 1.8rem;
+            margin-bottom: 0.3rem;
+        }
+        .subtitle {
+            color: #8888a0;
+            font-size: 0.85rem;
+            margin-bottom: 2rem;
+        }
+        h2 {
+            color: #f0f0f5;
+            font-size: 1.15rem;
+            margin-top: 1.8rem;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.3rem;
+            border-bottom: 1px solid #2a2a40;
+        }
+        p, li {
+            font-size: 0.92rem;
+            margin-bottom: 0.6rem;
+        }
+        ul {
+            padding-left: 1.5rem;
+            margin-bottom: 0.8rem;
+        }
+        li { margin-bottom: 0.3rem; }
+        strong { color: #f0f0f5; }
+        code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #00d26a;
+        }
+        a {
+            color: #e94560;
+            text-decoration: none;
+        }
+        a:hover { text-decoration: underline; }
+        .badge {
+            display: inline-block;
+            background: rgba(0, 210, 106, 0.15);
+            color: #00d26a;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 8px 20px;
+            background: #1a1a2e;
+            border: 1.5px solid #2a2a40;
+            border-radius: 8px;
+            color: #c8c8d0;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            background: #2a2a40;
+            text-decoration: none;
+        }
+        .highlight-box {
+            background: #1a1a2e;
+            border: 1.5px solid #2a2a40;
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            margin: 1rem 0;
+        }
+        .highlight-box p { margin-bottom: 0.3rem; }
+        footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid #2a2a40;
+            font-size: 0.75rem;
+            color: #5a5a70;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Privacy Policy</h1>
+        <p class="subtitle">Card Vault — Encrypted Card Details & RuPay Coupon Manager</p>
+
+        <div class="highlight-box">
+            <p><strong>🛡️ TL;DR:</strong> Your data never leaves your device. We don't collect, store, or transmit any personal information to any server. Everything runs 100% in your browser.</p>
+        </div>
+
+        <h2>1. What This App Does</h2>
+        <p>Card Vault is a <strong>static website</strong> hosted on GitHub Pages that helps you:</p>
+        <ul>
+            <li>Store credit/debit card details in AES-256 encrypted form</li>
+            <li>Fetch and manage RuPay coupon codes from your Gmail</li>
+        </ul>
+        <p>There is <strong>no backend server</strong>. All processing happens locally in your browser.</p>
+
+        <h2>2. Data Storage <span class="badge">Local Only</span></h2>
+        <p>All your data is stored exclusively in your browser's <code>localStorage</code>:</p>
+        <ul>
+            <li><strong>Card details</strong> — encrypted with AES-256-GCM using a PIN-derived key (PBKDF2). The PIN is never stored.</li>
+            <li><strong>Coupon data</strong> — cached locally after fetching from Gmail so you can view them offline.</li>
+            <li><strong>Used/unused status</strong> — stored locally to track which coupons you've redeemed.</li>
+            <li><strong>Gmail OAuth token</strong> — stored temporarily (expires in 1 hour) for API access.</li>
+        </ul>
+        <p><strong>No data is ever sent to any third-party server, analytics service, or database.</strong></p>
+
+        <h2>3. Gmail Access <span class="badge">Read-Only</span></h2>
+        <p>When you connect your Gmail account, the app requests the <code>gmail.readonly</code> scope, which means:</p>
+        <ul>
+            <li>✅ Can <strong>read</strong> email messages (to find RuPay coupon emails)</li>
+            <li>❌ Cannot send, delete, or modify any emails</li>
+            <li>❌ Cannot access contacts, calendar, or any other Google service</li>
+        </ul>
+        <p><strong>What we search for:</strong> Only emails from <code>rupay@truztee.com</code> and <code>rupay@golftripz.com</code> with "Booking ID" in the subject. No other emails are accessed.</p>
+        <p><strong>Email content is never stored on any server.</strong> It is fetched, parsed for coupon codes in your browser, and the raw email data is discarded immediately. Only the extracted coupon details (category, date, code) are cached locally.</p>
+
+        <h2>4. Google OAuth</h2>
+        <p>Authentication is handled via <strong>Google Identity Services (GIS)</strong> — Google's official OAuth library. The app:</p>
+        <ul>
+            <li>Does not see or store your Google password</li>
+            <li>Receives a temporary access token (valid ~1 hour)</li>
+            <li>Stores the token in <code>localStorage</code> (cleared on logout or expiry)</li>
+            <li>You can revoke access anytime from <a href="https://myaccount.google.com/permissions" target="_blank">Google Account Permissions</a></li>
+        </ul>
+
+        <h2>5. No Data Collection</h2>
+        <p>This app does <strong>not</strong> use:</p>
+        <ul>
+            <li>❌ Google Analytics or any tracking service</li>
+            <li>❌ Cookies (except Google's own OAuth cookies)</li>
+            <li>❌ Any server-side processing or database</li>
+            <li>❌ Advertising or marketing pixels</li>
+            <li>❌ Error reporting or crash analytics</li>
+        </ul>
+
+        <h2>6. Security</h2>
+        <ul>
+            <li><strong>Encryption:</strong> Card data is encrypted with AES-256-GCM, a military-grade encryption standard. The encryption key is derived from your PIN using PBKDF2 with 100,000 iterations and a random salt.</li>
+            <li><strong>HTTPS:</strong> GitHub Pages serves the site over HTTPS, encrypting data in transit.</li>
+            <li><strong>No remote storage:</strong> Since data never leaves your device, it cannot be intercepted by a server breach.</li>
+            <li><strong>Open source:</strong> The complete source code is publicly available for inspection.</li>
+        </ul>
+
+        <h2>7. Third-Party Services</h2>
+        <p>The only external services used are:</p>
+        <ul>
+            <li><strong>Google Gmail API</strong> — to search and read coupon emails (with your explicit consent)</li>
+            <li><strong>Google Identity Services</strong> — for OAuth authentication</li>
+            <li><strong>GitHub Pages</strong> — static file hosting</li>
+        </ul>
+        <p>No other third-party services, SDKs, or libraries are used.</p>
+
+        <h2>8. Data Deletion</h2>
+        <p>To delete all your data:</p>
+        <ul>
+            <li>Clear your browser's <code>localStorage</code> for this site, or</li>
+            <li>Use the browser's "Clear site data" option in Settings</li>
+            <li>Revoke Gmail access from <a href="https://myaccount.google.com/permissions" target="_blank">Google Account Permissions</a></li>
+        </ul>
+        <p>Since no data exists on any server, clearing your browser data completely removes everything.</p>
+
+        <h2>9. Children's Privacy</h2>
+        <p>This app is intended for personal use by adults. It is not designed for or directed at children under 13.</p>
+
+        <h2>10. Changes to This Policy</h2>
+        <p>This privacy policy may be updated occasionally. Any changes will be reflected on this page with an updated date.</p>
+
+        <footer>
+            <p>Last updated: March 2026</p>
+            <p>This is a personal project. For questions, please open an issue on the GitHub repository.</p>
+        </footer>
+
+        <a href="index.html" class="back-link">← Back to Card Vault</a>
+    </div>
+</body>
+</html>
