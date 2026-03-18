@@ -726,7 +726,15 @@ function renderCouponTable(coupons) {
     if (pendingCount > 0) countText += ` + ${pendingCount} pending`;
     document.getElementById('couponCount').textContent = countText;
 
-    let html = active.map(c => buildRow(c, false)).join('');
+    // Active section heading (same height as Used section)
+    let html = `<tr><td colspan="5" style="padding:8px 0 10px;border:none;">
+        <div style="background:var(--bg-card);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:44px;">
+            <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
+                🎫 Active (${activeCount}${pendingCount > 0 ? ` + ${pendingCount} pending` : ''})
+            </span>
+        </div>
+    </td></tr>`;
+    html += active.map(c => buildRow(c, false)).join('');
 
     if (used.length > 0) {
         // Filter used coupons by coupon date (date of issue), not when marked
@@ -748,9 +756,9 @@ function renderCouponTable(coupons) {
             `<button class="range-btn ${m === selectedMonths ? 'active' : ''}" data-months="${m}">${m === 0 ? 'All' : m + 'M'}</button>`
         ).join('');
 
-        html += `<tr><td colspan="5" style="padding:12px 0 6px;border:none;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <span style="font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
+        html += `<tr><td colspan="5" style="padding:28px 0 10px;border:none;">
+            <div style="background:var(--bg-card);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:44px;">
+                <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
                     ✅ Used (${filteredUsed.length})
                 </span>
                 <div style="display:flex;gap:4px;">${rangeBtns}</div>
@@ -915,6 +923,10 @@ const COUPON_WORTH = {
     'four fountains': 1500,
     'four fountains de-stress spa': 1500,
     'gaana': 600,
+    'flipkart': 250,
+    'aromathai': 1500,
+    'aromathai day spa': 1500,
+    'aroma thai': 1500,
 };
 
 function getCouponWorth(category) {
