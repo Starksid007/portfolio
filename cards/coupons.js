@@ -156,8 +156,137 @@ function handleOAuthCallback() {
                 if (couponTabBtn) couponTabBtn.click();
                 initCouponsTab();
             }, 300);
+            // Start silent refresh timer
+            startSilentRefreshTimer(expiresIn);
         }
     }
+}
+
+// ============================
+// 🔄 SILENT TOKEN AUTO-REFRESH
+// ============================
+let silentRefreshTimer = null;
+
+function startSilentRefreshTimer(expiresIn) {
+    if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
+    // Refresh 5 minutes before expiry (or after 50 min if 1hr token)
+    const refreshMs = Math.max((expiresIn - 300) * 1000, 30000);
+    silentRefreshTimer = setTimeout(() => trySilentRefresh(), refreshMs);
+    console.log(`[CardVault] Silent refresh scheduled in ${Math.round(refreshMs/60000)} min`);
+}
+
+function trySilentRefresh() {
+    const clientId = getGmailClientId();
+    if (!clientId) return;
+
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: getRedirectUri(),
+        response_type: 'token',
+        scope: GMAIL_SCOPES,
+        include_granted_scopes: 'true',
+        prompt: 'none' // Silent — no user interaction
+    });
+    const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+
+    // Use hidden iframe for silent refresh
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.id = 'silentRefreshFrame';
+
+    // Remove any existing iframe
+    const existing = document.getElementById('silentRefreshFrame');
+    if (existing) existing.remove();
+
+    let handled = false;
+    const cleanup = () => {
+        if (handled) return;
+        handled = true;
+        try { iframe.remove(); } catch {}
+    };
+
+    iframe.addEventListener('load', () => {
+        try {
+            const iframeHash = iframe.contentWindow.location.hash;
+            if (iframeHash && iframeHash.includes('access_token')) {
+                const iframeParams = new URLSearchParams(iframeHash.substring(1));
+                const newToken = iframeParams.get('access_token');
+                const newExpiry = parseInt(iframeParams.get('expires_in') || '3600');
+                if (newToken) {
+                    saveGmailToken(newToken, newExpiry);
+                    startSilentRefreshTimer(newExpiry);
+                    console.log('[CardVault] ✅ Token silently refreshed');
+                    cleanup();
+                    return;
+                }
+            }
+        } catch (e) {
+            // Cross-origin error = Google showed login page = silent refresh failed
+            console.log('[CardVault] Silent refresh failed (needs re-login)');
+        }
+        cleanup();
+    });
+
+    // Timeout after 10 seconds
+    setTimeout(() => {
+        if (!handled) {
+            console.log('[CardVault] Silent refresh timed out');
+            cleanup();
+        }
+    }, 10000);
+
+    document.body.appendChild(iframe);
+    iframe.src = authUrl;
+}
+
+// Popup-based quick re-login (fallback when silent fails)
+function popupReLogin() {
+    const clientId = getGmailClientId();
+    if (!clientId) { startGmailLogin(); return; }
+
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: getRedirectUri(),
+        response_type: 'token',
+        scope: GMAIL_SCOPES,
+        include_granted_scopes: 'true',
+        prompt: 'consent'
+    });
+
+    const w = 500, h = 600;
+    const left = screen.width / 2 - w / 2;
+    const top = screen.height / 2 - h / 2;
+    const popup = window.open(
+        'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString(),
+        'gmailLogin',
+        `width=${w},height=${h},left=${left},top=${top}`
+    );
+
+    // Poll for redirect with token
+    const pollTimer = setInterval(() => {
+        try {
+            if (!popup || popup.closed) {
+                clearInterval(pollTimer);
+                return;
+            }
+            const popupHash = popup.location.hash;
+            if (popupHash && popupHash.includes('access_token')) {
+                const popupParams = new URLSearchParams(popupHash.substring(1));
+                const token = popupParams.get('access_token');
+                const expiresIn = parseInt(popupParams.get('expires_in') || '3600');
+                if (token) {
+                    saveGmailToken(token, expiresIn);
+                    startSilentRefreshTimer(expiresIn);
+                    popup.close();
+                    clearInterval(pollTimer);
+                    updateCouponUI();
+                    if (typeof showToast === 'function') showToast('✅ Gmail reconnected!');
+                }
+            }
+        } catch (e) {
+            // Cross-origin — popup still on Google domain, keep polling
+        }
+    }, 500);
 }
 
 // ============================
@@ -1074,6 +1203,21 @@ document.getElementById('analyticsApply').addEventListener('click', runAnalytics
 // ============================
 handleOAuthCallback();
 initCouponsTab();
+
+// Start silent refresh timer if we already have a valid token
+(function initSilentRefresh() {
+    const expiry = localStorage.getItem(GMAIL_TOKEN_EXPIRY_KEY);
+    const token = localStorage.getItem(GMAIL_TOKEN_KEY);
+    if (token && expiry) {
+        const remainingSec = Math.floor((parseInt(expiry) - Date.now()) / 1000);
+        if (remainingSec > 60) {
+            startSilentRefreshTimer(remainingSec);
+        } else if (remainingSec > 0) {
+            // Token about to expire — refresh now
+            trySilentRefresh();
+        }
+    }
+})();
 // Restore fetch range button from localStorage
 (function restoreFetchRange() {
     const saved = getFetchRangeMonths();
