@@ -122,12 +122,61 @@ function saveGmailClientId(id) {
     localStorage.setItem(GMAIL_CLIENT_ID_KEY, id.trim());
 }
 
+// ============================
+// 🔄 GOOGLE IDENTITY SERVICES (GIS)
+// ============================
+let gisTokenClient = null;
+let silentRefreshTimer = null;
+
+function initGisTokenClient() {
+    const clientId = getGmailClientId();
+    if (!clientId || !window.google?.accounts?.oauth2) return null;
+
+    gisTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: GMAIL_SCOPES,
+        callback: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+                const expiresIn = tokenResponse.expires_in || 3600;
+                saveGmailToken(tokenResponse.access_token, expiresIn);
+                startSilentRefreshTimer(expiresIn);
+                updateCouponUI();
+                console.log('[CardVault] ✅ Token received via GIS');
+                if (typeof showToast === 'function') showToast('✅ Gmail connected!');
+            } else if (tokenResponse.error) {
+                console.log('[CardVault] GIS error:', tokenResponse.error);
+                if (tokenResponse.error !== 'user_denied') {
+                    // Silent refresh failed — show re-login UI
+                    updateCouponUI();
+                }
+            }
+        },
+        error_callback: (err) => {
+            console.log('[CardVault] GIS error_callback:', err);
+        }
+    });
+    return gisTokenClient;
+}
+
 function startGmailLogin() {
     const clientId = getGmailClientId();
     if (!clientId) {
         showCouponError('Please set your Gmail Client ID first (⚙️ below).');
         return;
     }
+
+    // Try GIS first (preferred)
+    if (window.google?.accounts?.oauth2) {
+        if (!gisTokenClient) initGisTokenClient();
+        if (gisTokenClient) {
+            // Use '' to skip consent screens on re-login (Google remembers prior approval)
+            // Only shows account picker if multiple accounts, otherwise instant token
+            gisTokenClient.requestAccessToken({ prompt: '' });
+            return;
+        }
+    }
+
+    // Fallback: redirect-based flow (if GIS not loaded)
     const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: getRedirectUri(),
@@ -139,7 +188,7 @@ function startGmailLogin() {
     window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 }
 
-// Check if we're returning from OAuth redirect
+// Handle redirect-based OAuth callback (fallback)
 function handleOAuthCallback() {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
@@ -148,15 +197,12 @@ function handleOAuthCallback() {
         const expiresIn = parseInt(params.get('expires_in') || '3600');
         if (token) {
             saveGmailToken(token, expiresIn);
-            // Clean up URL hash
             history.replaceState(null, '', window.location.pathname + window.location.search);
-            // Auto-switch to coupons tab
             setTimeout(() => {
                 const couponTabBtn = document.querySelector('.tab-btn[data-tab="coupons"]');
                 if (couponTabBtn) couponTabBtn.click();
                 initCouponsTab();
             }, 300);
-            // Start silent refresh timer
             startSilentRefreshTimer(expiresIn);
         }
     }
@@ -165,128 +211,29 @@ function handleOAuthCallback() {
 // ============================
 // 🔄 SILENT TOKEN AUTO-REFRESH
 // ============================
-let silentRefreshTimer = null;
 
 function startSilentRefreshTimer(expiresIn) {
     if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
-    // Refresh 5 minutes before expiry (or after 50 min if 1hr token)
+    // Refresh 5 minutes before expiry
     const refreshMs = Math.max((expiresIn - 300) * 1000, 30000);
     silentRefreshTimer = setTimeout(() => trySilentRefresh(), refreshMs);
-    console.log(`[CardVault] Silent refresh scheduled in ${Math.round(refreshMs/60000)} min`);
+    console.log(`[CardVault] Silent refresh scheduled in ${Math.round(refreshMs / 60000)} min`);
 }
 
 function trySilentRefresh() {
-    const clientId = getGmailClientId();
-    if (!clientId) return;
+    console.log('[CardVault] Attempting silent token refresh...');
 
-    const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: getRedirectUri(),
-        response_type: 'token',
-        scope: GMAIL_SCOPES,
-        include_granted_scopes: 'true',
-        prompt: 'none' // Silent — no user interaction
-    });
-    const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
-
-    // Use hidden iframe for silent refresh
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.id = 'silentRefreshFrame';
-
-    // Remove any existing iframe
-    const existing = document.getElementById('silentRefreshFrame');
-    if (existing) existing.remove();
-
-    let handled = false;
-    const cleanup = () => {
-        if (handled) return;
-        handled = true;
-        try { iframe.remove(); } catch {}
-    };
-
-    iframe.addEventListener('load', () => {
-        try {
-            const iframeHash = iframe.contentWindow.location.hash;
-            if (iframeHash && iframeHash.includes('access_token')) {
-                const iframeParams = new URLSearchParams(iframeHash.substring(1));
-                const newToken = iframeParams.get('access_token');
-                const newExpiry = parseInt(iframeParams.get('expires_in') || '3600');
-                if (newToken) {
-                    saveGmailToken(newToken, newExpiry);
-                    startSilentRefreshTimer(newExpiry);
-                    console.log('[CardVault] ✅ Token silently refreshed');
-                    cleanup();
-                    return;
-                }
-            }
-        } catch (e) {
-            // Cross-origin error = Google showed login page = silent refresh failed
-            console.log('[CardVault] Silent refresh failed (needs re-login)');
+    // Use GIS with prompt:'' for silent refresh (no user interaction)
+    if (window.google?.accounts?.oauth2) {
+        if (!gisTokenClient) initGisTokenClient();
+        if (gisTokenClient) {
+            gisTokenClient.requestAccessToken({ prompt: '' });
+            return;
         }
-        cleanup();
-    });
+    }
 
-    // Timeout after 10 seconds
-    setTimeout(() => {
-        if (!handled) {
-            console.log('[CardVault] Silent refresh timed out');
-            cleanup();
-        }
-    }, 10000);
-
-    document.body.appendChild(iframe);
-    iframe.src = authUrl;
-}
-
-// Popup-based quick re-login (fallback when silent fails)
-function popupReLogin() {
-    const clientId = getGmailClientId();
-    if (!clientId) { startGmailLogin(); return; }
-
-    const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: getRedirectUri(),
-        response_type: 'token',
-        scope: GMAIL_SCOPES,
-        include_granted_scopes: 'true',
-        prompt: 'consent'
-    });
-
-    const w = 500, h = 600;
-    const left = screen.width / 2 - w / 2;
-    const top = screen.height / 2 - h / 2;
-    const popup = window.open(
-        'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString(),
-        'gmailLogin',
-        `width=${w},height=${h},left=${left},top=${top}`
-    );
-
-    // Poll for redirect with token
-    const pollTimer = setInterval(() => {
-        try {
-            if (!popup || popup.closed) {
-                clearInterval(pollTimer);
-                return;
-            }
-            const popupHash = popup.location.hash;
-            if (popupHash && popupHash.includes('access_token')) {
-                const popupParams = new URLSearchParams(popupHash.substring(1));
-                const token = popupParams.get('access_token');
-                const expiresIn = parseInt(popupParams.get('expires_in') || '3600');
-                if (token) {
-                    saveGmailToken(token, expiresIn);
-                    startSilentRefreshTimer(expiresIn);
-                    popup.close();
-                    clearInterval(pollTimer);
-                    updateCouponUI();
-                    if (typeof showToast === 'function') showToast('✅ Gmail reconnected!');
-                }
-            }
-        } catch (e) {
-            // Cross-origin — popup still on Google domain, keep polling
-        }
-    }, 500);
+    // GIS not available — can't silently refresh
+    console.log('[CardVault] GIS not available for silent refresh');
 }
 
 // ============================
@@ -941,12 +888,26 @@ fetchCouponsBtn.addEventListener('click', () => fetchCoupons(false));
 document.getElementById('fullRefreshBtn').addEventListener('click', () => fetchCoupons(true));
 
 gmailLogoutBtn.addEventListener('click', () => {
+    // Revoke GIS token if available
+    const token = localStorage.getItem(GMAIL_TOKEN_KEY);
+    if (token && window.google?.accounts?.oauth2) {
+        google.accounts.oauth2.revoke(token, () => {
+            console.log('[CardVault] Token revoked via GIS');
+        });
+    }
+    if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
     clearGmailToken();
     updateCouponUI();
-    document.getElementById('couponResults').style.display = 'none';
-    document.getElementById('couponEmpty').style.display = 'none';
+    // Keep cached coupons visible — only hide loading/empty states
     document.getElementById('couponLoading').style.display = 'none';
-    if (typeof showToast === 'function') showToast('📧 Gmail disconnected.');
+    document.getElementById('couponEmpty').style.display = 'none';
+    // Re-render cached coupons so they stay visible
+    const cached = loadCachedCoupons();
+    if (cached.length > 0) {
+        lastFetchedCoupons = cached;
+        renderCouponTable(cached);
+    }
+    if (typeof showToast === 'function') showToast('📧 Gmail disconnected. Cached coupons still visible.');
 });
 
 // Copy coupon code + Mark used / Unmark used
@@ -1218,6 +1179,35 @@ initCouponsTab();
         }
     }
 })();
+// Initialize GIS when the library loads (it's async)
+function waitForGisAndInit() {
+    if (window.google?.accounts?.oauth2) {
+        const clientId = getGmailClientId();
+        if (clientId) {
+            initGisTokenClient();
+            console.log('[CardVault] GIS token client initialized');
+        }
+    } else {
+        // GIS not loaded yet — retry after 500ms (up to 10 seconds)
+        let retries = 0;
+        const poll = setInterval(() => {
+            retries++;
+            if (window.google?.accounts?.oauth2) {
+                clearInterval(poll);
+                const clientId = getGmailClientId();
+                if (clientId) {
+                    initGisTokenClient();
+                    console.log('[CardVault] GIS token client initialized (delayed)');
+                }
+            } else if (retries > 20) {
+                clearInterval(poll);
+                console.log('[CardVault] GIS library failed to load — using redirect fallback');
+            }
+        }, 500);
+    }
+}
+waitForGisAndInit();
+
 // Restore fetch range button from localStorage
 (function restoreFetchRange() {
     const saved = getFetchRangeMonths();
