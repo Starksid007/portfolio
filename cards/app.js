@@ -138,6 +138,7 @@ function renderCards(filter = '') {
                 <div class="card-top-icons">
                     <button class="card-edit-btn" data-action="edit" data-index="${i}" title="Edit card">✏️</button>
                     <button class="card-copy-all ${shown ? 'active' : ''}" data-action="copyall" data-index="${i}" title="Copy all details">📋</button>
+                    <button class="card-copy-all ${shown ? 'active' : ''}" data-action="share" data-index="${i}" title="Share card details">📤</button>
                 </div>
             </div>
             <div class="card-details">
@@ -211,9 +212,10 @@ cardGrid.addEventListener('click', (e) => {
     else if (btn.dataset.action === 'hide') hideCard(idx);
     else if (btn.dataset.action === 'delete') requestDelete(idx);
     else if (btn.dataset.action === 'copyall') copyAllDetails(idx, btn);
+    else if (btn.dataset.action === 'share') shareCardDetails(idx, btn);
     else if (btn.dataset.action === 'edit') openEditCard(idx);
-    else if (btn.dataset.action === 'toggle-limit') {
-        const limitSpan = btn.parentElement.querySelector('.detail-value');
+    else if (btn.dataset.action === 'toggle-limit' || btn.classList.contains('limit-hidden') || (btn.classList.contains('detail-value') && btn.dataset.limit)) {
+        const limitSpan = btn.classList.contains('detail-value') ? btn : btn.parentElement.querySelector('.detail-value');
         if (limitSpan.classList.contains('limit-hidden')) {
             limitSpan.textContent = limitSpan.dataset.limit;
             limitSpan.classList.remove('limit-hidden');
@@ -281,6 +283,53 @@ function copyAllDetails(i, btnEl) {
         showToast('📋 All details copied!');
         setTimeout(() => { btnEl.textContent = '📋'; }, 1500);
     });
+}
+
+/**
+ * Share card details via Web Share API (native share sheet on mobile)
+ * Falls back to copy-to-clipboard on desktop
+ */
+async function shareCardDetails(i, btnEl) {
+    const card = cards[i];
+    const dec = decryptedCache[i];
+    if (!dec) { showToast('🔓 View card details first to share.'); return; }
+
+    const lines = [
+        `${card.bankName} : ${card.cardName}`,
+        dec.number,
+        dec.expiry,
+        dec.cvv
+    ];
+    if (card.holderName) lines.push(card.holderName);
+    if (card.creditLimit) lines.push('Limit: ₹' + formatIndianNumber(card.creditLimit));
+    const shareText = lines.join('\n');
+
+    // Try Web Share API (mobile — opens native share sheet)
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: `${card.bankName} — ${card.cardName}`,
+                text: shareText
+            });
+            btnEl.textContent = '✅';
+            showToast('📤 Shared!');
+            setTimeout(() => { btnEl.textContent = '📤'; }, 1500);
+            return;
+        } catch (err) {
+            // User cancelled share — that's fine
+            if (err.name === 'AbortError') return;
+        }
+    }
+
+    // Fallback: copy to clipboard (desktop)
+    try {
+        await navigator.clipboard.writeText(shareText);
+        btnEl.textContent = '✅';
+        showToast('📋 Copied to clipboard (share not available on this device)');
+        setTimeout(() => { btnEl.textContent = '📤'; }, 1500);
+    } catch {
+        showToast('❌ Share not available on this device.');
+    }
 }
 
 async function showPinModal() {
@@ -666,7 +715,8 @@ saveCardBtn.addEventListener('click', async () => {
     } catch (err) {
         addCardError.textContent = '❌ Encryption failed: ' + err.message; addCardError.style.display = 'block';
     } finally {
-        saveCardBtn.disabled = false; saveCardBtn.textContent = '🔐 Encrypt & Save';
+        saveCardBtn.disabled = false;
+        saveCardBtn.textContent = editingIndex !== null ? '💾 Update Card' : '🔐 Encrypt & Save';
     }
 });
 
