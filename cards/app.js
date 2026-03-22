@@ -264,21 +264,28 @@ function hideCard(i) {
 /**
  * Copy all card details in a formatted text block
  */
+function buildFormattedCardText(card, dec) {
+    const network = card.cardNetwork || '';
+    const type = card.cardType || 'Credit Card';
+    const lines = [
+        `${card.bankName} : ${card.cardName} : ${network} (${type})`,
+        `—————————————————`,
+        formatCardNumber(dec.number),
+        `${dec.expiry}  |  ${dec.cvv}`,
+    ];
+    if (card.holderName) lines.push(card.holderName);
+    if (card.creditLimit) lines.push(`Limit: ₹${formatIndianNumber(card.creditLimit)}`);
+    return lines.join('\n');
+}
+
 function copyAllDetails(i, btnEl) {
     const card = cards[i];
     const dec = decryptedCache[i];
     if (!dec) return;
 
-    const lines = [
-        `${card.bankName} : ${card.cardName}`,
-        dec.number,
-        dec.expiry,
-        dec.cvv
-    ];
-    if (card.holderName) lines.push(card.holderName);
-    if (card.creditLimit) lines.push('Limit: ₹' + formatIndianNumber(card.creditLimit));
+    const text = buildFormattedCardText(card, dec);
 
-    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    navigator.clipboard.writeText(text).then(() => {
         btnEl.textContent = '✅';
         showToast('📋 All details copied!');
         setTimeout(() => { btnEl.textContent = '📋'; }, 1500);
@@ -294,15 +301,7 @@ async function shareCardDetails(i, btnEl) {
     const dec = decryptedCache[i];
     if (!dec) { showToast('🔓 View card details first to share.'); return; }
 
-    const lines = [
-        `${card.bankName} : ${card.cardName}`,
-        dec.number,
-        dec.expiry,
-        dec.cvv
-    ];
-    if (card.holderName) lines.push(card.holderName);
-    if (card.creditLimit) lines.push('Limit: ₹' + formatIndianNumber(card.creditLimit));
-    const shareText = lines.join('\n');
+    const shareText = buildFormattedCardText(card, dec);
 
     // Try Web Share API (mobile — opens native share sheet)
     if (navigator.share) {
