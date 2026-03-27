@@ -92,6 +92,40 @@ let cards = loadCards();
 let sessionPin = null;
 let revealedCards = new Set();
 let decryptedCache = {};
+
+// ============================
+// 🕐 SESSION PERSISTENCE (7-day)
+// ============================
+const SESSION_PIN_KEY = 'cardvault_session_pin';
+const SESSION_TS_KEY = 'cardvault_session_ts';
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+
+function setSessionPin(pin) {
+    sessionPin = pin;
+    localStorage.setItem(SESSION_PIN_KEY, btoa(pin));
+    localStorage.setItem(SESSION_TS_KEY, String(Date.now()));
+}
+
+function clearSessionPin() {
+    sessionPin = null;
+    localStorage.removeItem(SESSION_PIN_KEY);
+    localStorage.removeItem(SESSION_TS_KEY);
+}
+
+function restoreSession() {
+    const stored = localStorage.getItem(SESSION_PIN_KEY);
+    const ts = localStorage.getItem(SESSION_TS_KEY);
+    if (!stored || !ts) return;
+    const age = Date.now() - parseInt(ts);
+    if (age < SESSION_MAX_AGE) {
+        sessionPin = atob(stored);
+    } else {
+        clearSessionPin(); // expired
+    }
+}
+
+// Restore on load
+restoreSession();
 let pendingRevealIndex = null;
 let pendingDeleteIndex = null;
 let editingIndex = null; // tracks which card is being edited
@@ -115,13 +149,21 @@ function formatIndianNumber(num) {
     return rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
 }
 
+// Generate acronym from name: "Punjab National Bank" → "pnb", "Bank of Baroda" → "bob"
+function getAcronym(name) {
+    return name.split(/\s+/).map(w => w[0] || '').join('').toLowerCase();
+}
+
 function renderCards(filter = '') {
     const q = filter.toLowerCase().trim();
     let count = 0;
     cardGrid.innerHTML = '';
 
     cards.forEach((card, i) => {
-        if (q && !card.bankName.toLowerCase().includes(q) && !card.cardName.toLowerCase().includes(q)) return;
+        if (q && !card.bankName.toLowerCase().includes(q)
+              && !card.cardName.toLowerCase().includes(q)
+              && !getAcronym(card.bankName).includes(q)
+              && !getAcronym(card.cardName).includes(q)) return;
         if (activeTypeFilter !== 'all' && (card.cardType || 'Credit Card') !== activeTypeFilter) return;
         count++;
         const shown = revealedCards.has(i);
@@ -246,10 +288,10 @@ async function revealCard(i, pin) {
     try {
         decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
         revealedCards.add(i);
-        sessionPin = pin;
+        setSessionPin(pin);
         renderCards(searchInput.value);
     } catch {
-        sessionPin = null;
+        clearSessionPin();
         pinError.textContent = '❌ Incorrect PIN.';
         pinError.style.display = 'block';
         pinInput.value = ''; pinInput.focus();
@@ -344,7 +386,7 @@ async function showPinModal() {
             try {
                 const i = pendingRevealIndex;
                 decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
-                revealedCards.add(i); sessionPin = pin;
+                revealedCards.add(i); setSessionPin(pin);
                 hidePinModal(); renderCards(searchInput.value);
                 return; // Success — no need to show modal
             } catch {
@@ -370,11 +412,11 @@ unlockBtn.addEventListener('click', async () => {
     try {
         const i = pendingRevealIndex;
         decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
-        revealedCards.add(i); sessionPin = pin;
+        revealedCards.add(i); setSessionPin(pin);
         hidePinModal(); renderCards(searchInput.value);
         offerBiometricEnrollment(pin);
     } catch {
-        sessionPin = null;
+        clearSessionPin();
         pinError.textContent = '❌ Incorrect PIN. Try again.'; pinError.style.display = 'block';
         pinInput.value = ''; pinInput.focus();
     }
@@ -695,7 +737,7 @@ saveCardBtn.addEventListener('click', async () => {
             delete decryptedCache[editingIndex];
             editingIndex = null;
             saveCards(cards);
-            sessionPin = pin;
+            setSessionPin(pin);
             if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
             hideAddCardModal();
             renderCards(searchInput.value);
@@ -704,7 +746,7 @@ saveCardBtn.addEventListener('click', async () => {
         } else {
             cards.push(updatedCard);
             saveCards(cards);
-            sessionPin = pin;
+            setSessionPin(pin);
             if (holderName) localStorage.setItem(HOLDER_KEY, holderName);
             hideAddCardModal();
             renderCards(searchInput.value);
@@ -771,7 +813,7 @@ importFile.addEventListener('change', (e) => {
             }
             cards = imported;
             saveCards(cards);
-            revealedCards.clear(); decryptedCache = {}; sessionPin = null;
+            revealedCards.clear(); decryptedCache = {}; clearSessionPin();
             renderCards(searchInput.value);
             showToast('📥 Imported ' + imported.length + ' card(s)!');
         } catch (err) {
@@ -1028,7 +1070,7 @@ document.getElementById('biometricBtn').addEventListener('click', async () => {
         try {
             const i = pendingRevealIndex;
             decryptedCache[i] = await decryptData(cards[i].encryptedData, pin);
-            revealedCards.add(i); sessionPin = pin;
+            revealedCards.add(i); setSessionPin(pin);
             hidePinModal(); renderCards(searchInput.value);
         } catch {
             pinError.textContent = '❌ Biometric PIN failed. Enter PIN manually.';
