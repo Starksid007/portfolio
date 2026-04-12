@@ -39,18 +39,7 @@ function getUsedCoupons() {
     try {
         const raw = localStorage.getItem(USED_COUPONS_KEY);
         if (!raw) return {};
-        const data = JSON.parse(raw);
-        // Auto-cleanup: remove entries older than 1 year
-        const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
-        let changed = false;
-        for (const bookingId in data) {
-            if (data[bookingId].usedAt < oneYearAgo) {
-                delete data[bookingId];
-                changed = true;
-            }
-        }
-        if (changed) localStorage.setItem(USED_COUPONS_KEY, JSON.stringify(data));
-        return data;
+        return JSON.parse(raw);
     } catch { return {}; }
 }
 
