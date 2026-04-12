@@ -783,7 +783,7 @@ function renderCouponTable(coupons) {
             const bgColor = isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)';
             couponCell = `<span class="coupon-pin-wrapper" style="display:inline-flex;align-items:center;gap:0;flex-wrap:wrap;">` +
                 `<code class="coupon-code-part" data-code="${escapeHtmlCoupon(codeOnly)}" title="Click to copy coupon code" style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${bgColor};padding:3px 8px;border-radius:4px 0 0 4px;cursor:pointer;transition:all 0.2s;">${escapeHtmlCoupon(codeOnly)}</code>` +
-                `<code class="coupon-pin-part" data-pin="${escapeHtmlCoupon(pinOnly)}" title="Click to copy PIN" style="color:${couponColor};font-weight:700;font-size:0.82rem;letter-spacing:1px;background:${bgColor};padding:3px 8px;border-radius:0 4px 4px 0;border-left:1.5px solid ${isUsed ? 'rgba(224,80,112,0.2)' : 'rgba(0,210,106,0.25)'};cursor:pointer;transition:all 0.2s;">pin:${escapeHtmlCoupon(pinOnly)}</code>` +
+                `<code class="coupon-pin-part" data-pin="${escapeHtmlCoupon(pinOnly)}" title="Click to copy PIN" style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${bgColor};padding:3px 8px;border-radius:0 4px 4px 0;border-left:1.5px solid ${isUsed ? 'rgba(224,80,112,0.2)' : 'rgba(0,210,106,0.25)'};cursor:pointer;transition:all 0.2s;">pin:${escapeHtmlCoupon(pinOnly)}</code>` +
                 `</span>`;
         } else {
             couponCell = `<code style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)'};padding:3px 8px;border-radius:4px;">${escapeHtmlCoupon(c.coupon)}</code>`;
