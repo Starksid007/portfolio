@@ -1,1254 +1,439 @@
-// ============================================================
-// 🎫 RuPay Coupon Fetcher — Client-Side Gmail API
-// ============================================================
-// Uses Google OAuth2 Implicit Flow (no server needed)
-// Searches Gmail for RuPay coupon emails and extracts coupon codes
-// ============================================================
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-const GMAIL_CLIENT_ID_KEY = 'cardvault_gmail_client_id';
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-const GMAIL_TOKEN_KEY = 'cardvault_gmail_token';
-const GMAIL_TOKEN_EXPIRY_KEY = 'cardvault_gmail_expiry';
-const USED_COUPONS_KEY = 'cardvault_used_coupons';
-const CACHED_COUPONS_KEY = 'cardvault_cached_coupons';
-const LAST_FETCH_TIME_KEY = 'cardvault_last_fetch_time';
-const COUPON_RANGE_KEY = 'cardvault_coupon_range';
-const FETCH_RANGE_KEY = 'cardvault_fetch_range';
-
-function getSelectedMonths() {
-    return parseInt(localStorage.getItem(COUPON_RANGE_KEY) || '1');
+:root {
+    --bg-primary: #0f0f1a;
+    --bg-secondary: #1a1a2e;
+    --bg-card: #16213e;
+    --accent: #e94560;
+    --accent-glow: rgba(233, 69, 96, 0.3);
+    --text-primary: #eee;
+    --text-secondary: #8892b0;
+    --text-muted: #5a6380;
+    --border: #2a2a4a;
+    --success: #00d26a;
+    --gold: #f0c040;
+    --radius: 16px;
+    --radius-sm: 10px;
 }
 
-function setSelectedMonths(m) {
-    localStorage.setItem(COUPON_RANGE_KEY, String(m));
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
 }
 
-function getFetchRangeMonths() {
-    return parseInt(localStorage.getItem(FETCH_RANGE_KEY) || '1');
+.container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* ===== Header ===== */
+header { text-align: center; margin-bottom: 2rem; }
+header h1 {
+    font-size: 2.2rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 0.3rem;
+}
+.subtitle { color: var(--text-secondary); font-size: 0.95rem; }
+/* ===== Tab Navigation ===== */
+.tab-nav {
+    display: flex; gap: 0; margin-top: 1.2rem;
+    background: var(--bg-secondary); border-radius: 50px; padding: 4px;
+    border: 1.5px solid var(--border); max-width: 300px; margin-left: auto; margin-right: auto;
+}
+.tab-btn {
+    flex: 1; padding: 10px 16px; border: none; background: transparent;
+    color: var(--text-muted); font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; border-radius: 50px; transition: all 0.3s; letter-spacing: 0.3px;
+}
+.tab-btn:hover { color: var(--text-secondary); }
+.tab-btn.active {
+    background: var(--accent); color: white; box-shadow: 0 2px 12px var(--accent-glow);
+}
+.tab-content { display: none; animation: fadeIn 0.25s ease; }
+.tab-content.active { display: block; }
+.coupon-section { padding: 0.5rem 0; }
+
+/* Card Count Bar */
+.card-count-bar {
+    color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+}
+.card-count-num { color: var(--accent); font-weight: 700; font-size: 1.1rem; }
+
+/* Type Filters */
+.type-filters { display: flex; gap: 6px; }
+.type-filter-btn {
+    padding: 5px 14px; border-radius: 50px; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; border: 1.5px solid var(--border);
+    background: transparent; color: var(--text-muted); letter-spacing: 0.3px;
+}
+.type-filter-btn:hover { border-color: var(--text-secondary); color: var(--text-secondary); }
+.type-filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+
+/* ===== Search ===== */
+.search-wrapper { margin-bottom: 1.2rem; }
+.search-box { position: relative; max-width: 600px; margin: 0 auto; }
+.search-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--text-muted); pointer-events: none; }
+#searchInput {
+    width: 100%; padding: 14px 44px 14px 48px; background: var(--bg-secondary);
+    border: 1.5px solid var(--border); border-radius: 50px; color: var(--text-primary);
+    font-size: 1rem; outline: none; transition: border-color 0.3s, box-shadow 0.3s;
+}
+#searchInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+#searchInput::placeholder { color: var(--text-muted); }
+.clear-btn {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--text-muted); font-size: 1.4rem;
+    cursor: pointer; display: none; line-height: 1; padding: 4px; transition: color 0.2s;
+}
+.clear-btn:hover { color: var(--text-primary); }
+.clear-btn.visible { display: block; }
+
+/* ===== Action Bar ===== */
+.action-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.5rem; gap: 0.8rem; flex-wrap: wrap;
+}
+.action-right { display: flex; gap: 0.5rem; }
+.action-btn {
+    padding: 8px 18px; border-radius: 50px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: all 0.3s; border: 1.5px solid; letter-spacing: 0.3px;
+}
+.add-btn { background: var(--accent); color: white; border-color: var(--accent); }
+.add-btn:hover { box-shadow: 0 0 20px var(--accent-glow); transform: scale(1.03); }
+.export-btn, .import-btn { background: transparent; color: var(--text-secondary); border-color: var(--border); }
+.export-btn:hover, .import-btn:hover { border-color: var(--gold); color: var(--gold); }
+.cancel-btn { background: transparent; color: var(--text-secondary); border-color: var(--border); }
+.cancel-btn:hover { border-color: var(--text-primary); color: var(--text-primary); }
+.delete-confirm-btn { background: var(--accent); color: white; border-color: var(--accent); }
+.delete-confirm-btn:hover { opacity: 0.9; }
+.delete-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem; }
+
+/* ===== Card Grid ===== */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 1.5rem; }
+@media (max-width: 500px) { .card-grid { grid-template-columns: 1fr; } }
+
+/* ===== Credit Card ===== */
+.credit-card {
+    background: linear-gradient(145deg, var(--bg-card), #1e2d50);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem;
+    transition: transform 0.25s, box-shadow 0.25s; position: relative; overflow: hidden;
+}
+.credit-card::before {
+    content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%;
+    background: radial-gradient(circle, rgba(233, 69, 96, 0.06), transparent 60%); pointer-events: none;
+}
+.credit-card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3); }
+
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.2rem; }
+.bank-name { font-size: 1.15rem; font-weight: 700; color: var(--gold); }
+.card-name { font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px; }
+.card-top-icons { display: flex; gap: 6px; flex-shrink: 0; }
+.card-edit-btn {
+    background: none; border: 1.5px solid var(--border); color: var(--text-muted);
+    width: 36px; height: 34px; border-radius: 8px; font-size: 0.95rem;
+    cursor: pointer; transition: all 0.3s; display: flex;
+    align-items: center; justify-content: center;
+}
+.card-edit-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(240, 192, 64, 0.1); transform: scale(1.08); }
+.card-copy-all {
+    background: none; border: 1.5px solid var(--border); color: var(--text-muted);
+    width: 36px; height: 34px; border-radius: 8px; font-size: 1.1rem;
+    cursor: pointer; transition: all 0.3s; flex-shrink: 0; display: flex;
+    align-items: center; justify-content: center; opacity: 0.4; pointer-events: none;
+}
+.card-copy-all.active {
+    opacity: 1; pointer-events: auto; border-color: var(--success); color: var(--success);
+}
+.card-copy-all.active:hover {
+    background: rgba(0, 210, 106, 0.15); box-shadow: 0 0 12px rgba(0, 210, 106, 0.2); transform: scale(1.08);
 }
 
-function setFetchRangeMonths(m) {
-    localStorage.setItem(FETCH_RANGE_KEY, String(m));
+.holder-name {
+    font-size: 0.9rem; font-weight: 600; color: var(--text-secondary);
+    letter-spacing: 1.5px; text-transform: uppercase; margin-top: 0.6rem;
 }
 
-// ============================
-// ✅ USED COUPONS (localStorage)
-// ============================
+.card-details { margin-top: 0.8rem; }
+.detail-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+.detail-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); min-width: 50px; }
+.detail-value { font-family: 'Courier New', monospace; font-size: 1.05rem; letter-spacing: 2px; color: var(--text-secondary); }
+.detail-value.revealed { color: var(--text-primary); }
+.card-number-display { font-size: 1.2rem; letter-spacing: 3px; }
+.copy-btn {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-size: 0.85rem; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; margin-left: auto; display: none;
+}
+.copy-btn.visible { display: inline-block; }
+.copy-btn:hover { color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+.copy-btn.copied { color: var(--success); }
+.card-bottom-row { display: flex; gap: 1.5rem; margin-bottom: 0.2rem; }
 
-function getUsedCoupons() {
-    try {
-        const raw = localStorage.getItem(USED_COUPONS_KEY);
-        if (!raw) return {};
-        const data = JSON.parse(raw);
-        // Auto-cleanup: remove entries older than 1 year
-        const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
-        let changed = false;
-        for (const bookingId in data) {
-            if (data[bookingId].usedAt < oneYearAgo) {
-                delete data[bookingId];
-                changed = true;
-            }
-        }
-        if (changed) localStorage.setItem(USED_COUPONS_KEY, JSON.stringify(data));
-        return data;
-    } catch { return {}; }
+.card-action-row {
+    display: flex; justify-content: center; gap: 0.8rem; margin-top: 1rem;
+    padding-top: 0.8rem; border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.view-btn {
+    padding: 8px 24px; border: 1.5px solid var(--accent); background: transparent;
+    color: var(--accent); border-radius: 50px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: all 0.3s; letter-spacing: 0.5px;
+}
+.view-btn:hover { background: var(--accent); color: white; box-shadow: 0 0 20px var(--accent-glow); }
+.view-btn.hide-btn { border-color: var(--text-muted); color: var(--text-muted); }
+.view-btn.hide-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); box-shadow: none; }
+.copy-all-btn { border-color: var(--success); color: var(--success); }
+.copy-all-btn:hover { background: rgba(0, 210, 106, 0.15); box-shadow: 0 0 15px rgba(0, 210, 106, 0.2); }
+.delete-btn { border-color: #5a3040; color: #c05070; }
+.delete-btn:hover { background: rgba(233, 69, 96, 0.15); color: var(--accent); border-color: var(--accent); box-shadow: none; }
+
+/* ===== No Results ===== */
+.no-results { text-align: center; padding: 3rem 1rem; color: var(--text-secondary); font-size: 1.1rem; }
+
+/* ===== Footer ===== */
+footer { text-align: center; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.8rem; }
+.made-by { margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* ===== Modal ===== */
+.modal-overlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+    background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 2rem; width: 90%; max-width: 380px; text-align: center; animation: slideUp 0.3s ease;
+}
+.modal-wide { max-width: 480px; text-align: left; max-height: 90vh; overflow-y: auto; }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.modal-header h2 { font-size: 1.3rem; }
+.modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; padding: 0 4px; transition: color 0.2s; }
+.modal-close:hover { color: var(--text-primary); }
+.modal-desc { color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem; }
+.pin-input-wrapper { margin-bottom: 1rem; }
+#pinInput {
+    width: 100%; padding: 14px 16px; background: var(--bg-primary); border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-primary); font-size: 1.2rem;
+    text-align: center; letter-spacing: 8px; outline: none; transition: border-color 0.3s, box-shadow 0.3s;
+}
+#pinInput::placeholder { font-size: 0.8rem; letter-spacing: 1px; }
+#pinInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.pin-error { color: var(--accent); font-size: 0.85rem; margin-bottom: 1rem; }
+.unlock-btn {
+    width: 100%; padding: 12px; background: linear-gradient(135deg, var(--accent), #c0392b);
+    color: white; border: none; border-radius: var(--radius-sm); font-size: 1rem;
+    font-weight: 600; cursor: pointer; transition: opacity 0.3s, transform 0.2s;
+}
+.unlock-btn:hover { opacity: 0.9; transform: scale(1.02); }
+.unlock-btn:active { transform: scale(0.98); }
+.save-btn { background: linear-gradient(135deg, var(--success), #00a854); }
+
+/* ===== Form Fields ===== */
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 0.3rem; }
+.form-group input {
+    width: 100%; padding: 11px 14px; background: var(--bg-primary); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text-primary); font-size: 1rem; outline: none; transition: border-color 0.3s;
+}
+.form-group input:focus { border-color: var(--accent); }
+.form-group input::placeholder { color: var(--text-muted); }
+.form-row { display: flex; gap: 1rem; }
+.form-row .form-group { flex: 1; }
+
+/* Radio Group */
+.radio-group { display: flex; gap: 1rem; margin-top: 0.3rem; }
+.radio-label {
+    display: flex; align-items: center; gap: 0.4rem; padding: 8px 16px;
+    background: var(--bg-primary); border: 1.5px solid var(--border); border-radius: 8px;
+    color: var(--text-secondary); font-size: 0.9rem; cursor: pointer; transition: all 0.2s; flex: 1;
+}
+.radio-label:has(input:checked) { border-color: var(--accent); color: var(--text-primary); background: rgba(233, 69, 96, 0.08); }
+.radio-label input[type="radio"] { accent-color: var(--accent); cursor: pointer; }
+
+/* Card Type Badge */
+.card-type-badge {
+    display: inline-block; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px;
+    padding: 2px 8px; border-radius: 50px; margin-left: 6px; vertical-align: middle;
+    text-transform: uppercase;
+}
+.card-type-badge.credit { background: rgba(233, 69, 96, 0.15); color: var(--accent); }
+.card-type-badge.debit { background: rgba(0, 210, 106, 0.15); color: var(--success); }
+
+/* Card Network Badge (bottom-right like real cards) */
+.card-network-badge {
+    text-align: right; margin-top: 0.5rem; display: flex; justify-content: flex-end; align-items: center;
+}
+.network-svg {
+    height: 22px; width: auto; padding: 2px 6px;
+    background: #ffffff; border-radius: 5px;
+    border: 1px solid rgba(200, 200, 200, 0.3);
+    display: block;
+}
+.network-text-fallback {
+    font-size: 0.75rem; font-weight: 800; font-style: italic;
+    letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; opacity: 0.7;
+    padding: 3px 8px; background: rgba(255, 255, 255, 0.08); border-radius: 6px;
 }
 
-function markCouponUsed(bookingId, couponData) {
-    const used = getUsedCoupons();
-    used[bookingId] = { ...couponData, usedAt: Date.now() };
-    localStorage.setItem(USED_COUPONS_KEY, JSON.stringify(used));
+/* Card Number Wrapper with Network Icon */
+.card-number-wrapper { position: relative; }
+.card-number-wrapper input { padding-right: 70px; }
+.network-icon {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; display: flex; align-items: center;
+}
+.network-icon.visible { opacity: 1; }
+.network-icon .network-svg { height: 20px; width: auto; padding: 2px 6px; }
+
+/* Searchable Dropdown */
+.dropdown-group { position: relative; }
+.dropdown-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    max-height: 200px; overflow-y: auto; background: var(--bg-primary);
+    border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.dropdown-item {
+    padding: 10px 14px; cursor: pointer; font-size: 0.95rem;
+    color: var(--text-secondary); transition: background 0.15s, color 0.15s;
+}
+.dropdown-item:hover, .dropdown-item.active {
+    background: rgba(233, 69, 96, 0.12); color: var(--text-primary);
+}
+.dropdown-item strong { color: var(--accent); font-weight: 700; }
+.dropdown-list::-webkit-scrollbar { width: 6px; }
+.dropdown-list::-webkit-scrollbar-track { background: transparent; }
+.dropdown-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ===== Coupon Button ===== */
+.coupon-btn { background: transparent; color: var(--gold); border-color: var(--gold); }
+.coupon-btn:hover { background: rgba(240, 192, 64, 0.1); box-shadow: 0 0 12px rgba(240, 192, 64, 0.2); }
+
+/* ===== Range Buttons ===== */
+.range-btn, .fetch-range-btn {
+    padding: 4px 12px; border-radius: 50px; font-size: 0.7rem; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; border: 1.5px solid var(--border);
+    background: transparent; color: var(--text-muted); letter-spacing: 0.5px;
+}
+.range-btn:hover, .fetch-range-btn:hover { border-color: var(--text-secondary); color: var(--text-secondary); }
+.range-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(240, 192, 64, 0.1); }
+.fetch-range-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+
+/* ===== Analytics Cards ===== */
+.analytics-card {
+    background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 1rem; text-align: center;
+}
+.analytics-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 0.3rem; }
+.analytics-value { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
+
+/* ===== Coupon Table ===== */
+.coupon-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.coupon-table th {
+    text-align: left; padding: 8px 10px; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-muted); border-bottom: 1.5px solid var(--border);
+}
+.coupon-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+.coupon-table tr:hover td { background: rgba(233, 69, 96, 0.04); }
+.coupon-table code { background: rgba(240, 192, 64, 0.1); padding: 3px 8px; border-radius: 4px; }
+.copy-coupon-btn {
+    background: none; border: none; cursor: pointer; font-size: 1rem;
+    padding: 2px 6px; border-radius: 4px; transition: all 0.2s;
+}
+.copy-coupon-btn:hover { background: rgba(233, 69, 96, 0.1); }
+
+/* Clickable coupon code & PIN parts (for vouchers with /pin: pattern) */
+.coupon-code-part:hover { filter: brightness(1.3); text-decoration: underline; text-underline-offset: 3px; }
+.coupon-pin-part:hover { filter: brightness(1.3); text-decoration: underline; text-underline-offset: 3px; }
+.coupon-code-part.copied-flash { outline: 2px solid var(--success); outline-offset: -2px; filter: brightness(1.5); }
+.coupon-pin-part.copied-flash { outline: 2px solid var(--gold); outline-offset: -2px; filter: brightness(1.5); }
+.coupon-action-btn {
+    background: none; border: 1px solid var(--border); cursor: pointer; font-size: 0.85rem;
+    padding: 3px 8px; border-radius: 6px; transition: all 0.2s; margin-left: 4px;
+}
+.mark-used-btn:hover { background: rgba(0, 210, 106, 0.15); border-color: var(--success); }
+.unmark-used-btn:hover { background: rgba(240, 192, 64, 0.15); border-color: var(--gold); }
+
+/* ===== Toast ===== */
+.toast {
+    position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--success); color: #000; padding: 10px 24px; border-radius: 50px;
+    font-size: 0.85rem; font-weight: 600; opacity: 0; transition: all 0.3s ease; z-index: 2000; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== 🌗 LIGHT MODE ===== */
+[data-theme="light"] {
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --accent: #e94560;
+    --accent-glow: rgba(233, 69, 96, 0.2);
+    --text-primary: #1a1a2e;
+    --text-secondary: #555;
+    --text-muted: #888;
+    --border: #ddd;
+    --success: #00a854;
+    --gold: #c89a20;
+}
+[data-theme="light"] .credit-card {
+    background: linear-gradient(145deg, #fff, #f5f7fa);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .credit-card:hover {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+[data-theme="light"] #searchInput { background: #fff; }
+[data-theme="light"] .modal { background: #fff; }
+[data-theme="light"] .form-group input { background: #f5f7fa; }
+[data-theme="light"] .toast { background: var(--success); color: #fff; }
+[data-theme="light"] .detail-value { color: #888; }
+[data-theme="light"] .detail-value.revealed { color: #1a1a2e; }
+[data-theme="light"] .card-type-badge.credit { background: rgba(233, 69, 96, 0.1); }
+[data-theme="light"] .card-type-badge.debit { background: rgba(0, 168, 84, 0.1); }
+[data-theme="light"] .radio-label { background: #f5f7fa; }
+
+/* Theme Toggle Button */
+.theme-toggle {
+    background: none; border: 1.5px solid var(--border); color: var(--text-muted);
+    width: 32px; height: 32px; border-radius: 50%; font-size: 0.85rem;
+    cursor: pointer; transition: all 0.3s; display: flex;
+    align-items: center; justify-content: center; position: fixed;
+    top: 1rem; right: 1rem; z-index: 100;
+}
+.theme-toggle:hover { border-color: var(--gold); color: var(--gold); background: rgba(200, 154, 32, 0.1); }
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+    .container { padding: 1.2rem 1rem; }
+    header h1 { font-size: 1.7rem; }
+    .card-number-display { font-size: 1rem; letter-spacing: 2px; }
+    .action-bar { flex-direction: column; align-items: stretch; }
+    .action-right { justify-content: center; flex-wrap: wrap; }
+
+    /* Coupon modal mobile */
+    .modal-wide { max-width: 95vw !important; padding: 1.2rem !important; }
+    .modal-header h2 { font-size: 1.1rem; }
+    .coupon-table { font-size: 0.78rem; }
+    .coupon-table th { font-size: 0.6rem; padding: 6px 4px; }
+    .coupon-table td { padding: 8px 4px; }
+    .coupon-table code { font-size: 0.72rem !important; letter-spacing: 0 !important; padding: 2px 4px !important; word-break: break-all; }
+    .coupon-action-btn { font-size: 0.75rem; padding: 2px 5px; margin-left: 2px; }
+    .copy-coupon-btn { font-size: 0.8rem; padding: 1px 3px; }
+    /* Hide Booking column on mobile */
+    .coupon-table th:nth-child(3),
+    .coupon-table td:nth-child(3) { display: none; }
 }
 
-function unmarkCouponUsed(bookingId) {
-    const used = getUsedCoupons();
-    delete used[bookingId];
-    localStorage.setItem(USED_COUPONS_KEY, JSON.stringify(used));
-}
-
-// ============================
-// 💾 CACHED COUPONS (localStorage)
-// ============================
-
-function saveCachedCoupons(coupons) {
-    try {
-        localStorage.setItem(CACHED_COUPONS_KEY, JSON.stringify(coupons));
-    } catch {}
-}
-
-function loadCachedCoupons() {
-    try {
-        const raw = localStorage.getItem(CACHED_COUPONS_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
-}
-
-// ============================
-// 🔐 OAUTH2 (Implicit Flow)
-// ============================
-
-function getRedirectUri() {
-    // Use current page URL without hash/query
-    return window.location.origin + window.location.pathname;
-}
-
-function getGmailToken() {
-    const token = localStorage.getItem(GMAIL_TOKEN_KEY);
-    const expiry = localStorage.getItem(GMAIL_TOKEN_EXPIRY_KEY);
-    if (token && expiry && Date.now() < parseInt(expiry)) {
-        return token;
-    }
-    // Token expired — clear it
-    localStorage.removeItem(GMAIL_TOKEN_KEY);
-    localStorage.removeItem(GMAIL_TOKEN_EXPIRY_KEY);
-    return null;
-}
-
-function saveGmailToken(token, expiresIn) {
-    localStorage.setItem(GMAIL_TOKEN_KEY, token);
-    localStorage.setItem(GMAIL_TOKEN_EXPIRY_KEY, String(Date.now() + expiresIn * 1000));
-}
-
-function clearGmailToken() {
-    localStorage.removeItem(GMAIL_TOKEN_KEY);
-    localStorage.removeItem(GMAIL_TOKEN_EXPIRY_KEY);
-}
-
-function getGmailClientId() {
-    return localStorage.getItem(GMAIL_CLIENT_ID_KEY) || '';
-}
-
-function saveGmailClientId(id) {
-    localStorage.setItem(GMAIL_CLIENT_ID_KEY, id.trim());
-}
-
-// ============================
-// 🔄 GOOGLE IDENTITY SERVICES (GIS)
-// ============================
-let gisTokenClient = null;
-let silentRefreshTimer = null;
-
-function initGisTokenClient() {
-    const clientId = getGmailClientId();
-    if (!clientId || !window.google?.accounts?.oauth2) return null;
-
-    gisTokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: GMAIL_SCOPES,
-        callback: (tokenResponse) => {
-            if (tokenResponse.access_token) {
-                const expiresIn = tokenResponse.expires_in || 3600;
-                saveGmailToken(tokenResponse.access_token, expiresIn);
-                startSilentRefreshTimer(expiresIn);
-                updateCouponUI();
-                console.log('[CardVault] ✅ Token received via GIS');
-                if (typeof showToast === 'function') showToast('✅ Gmail connected!');
-            } else if (tokenResponse.error) {
-                console.log('[CardVault] GIS error:', tokenResponse.error);
-                if (tokenResponse.error !== 'user_denied') {
-                    // Silent refresh failed — show re-login UI
-                    updateCouponUI();
-                }
-            }
-        },
-        error_callback: (err) => {
-            console.log('[CardVault] GIS error_callback:', err);
-        }
-    });
-    return gisTokenClient;
-}
-
-function startGmailLogin() {
-    const clientId = getGmailClientId();
-    if (!clientId) {
-        showCouponError('Please set your Gmail Client ID first (⚙️ below).');
-        return;
-    }
-
-    // Try GIS first (preferred)
-    if (window.google?.accounts?.oauth2) {
-        if (!gisTokenClient) initGisTokenClient();
-        if (gisTokenClient) {
-            // Use '' to skip consent screens on re-login (Google remembers prior approval)
-            // Only shows account picker if multiple accounts, otherwise instant token
-            gisTokenClient.requestAccessToken({ prompt: '' });
-            return;
-        }
-    }
-
-    // Fallback: redirect-based flow (if GIS not loaded)
-    const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: getRedirectUri(),
-        response_type: 'token',
-        scope: GMAIL_SCOPES,
-        include_granted_scopes: 'true',
-        prompt: 'consent'
-    });
-    window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
-}
-
-// Handle redirect-based OAuth callback (fallback)
-function handleOAuthCallback() {
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-        const params = new URLSearchParams(hash.substring(1));
-        const token = params.get('access_token');
-        const expiresIn = parseInt(params.get('expires_in') || '3600');
-        if (token) {
-            saveGmailToken(token, expiresIn);
-            history.replaceState(null, '', window.location.pathname + window.location.search);
-            setTimeout(() => {
-                const couponTabBtn = document.querySelector('.tab-btn[data-tab="coupons"]');
-                if (couponTabBtn) couponTabBtn.click();
-                initCouponsTab();
-            }, 300);
-            startSilentRefreshTimer(expiresIn);
-        }
-    }
-}
-
-// ============================
-// 🔄 SILENT TOKEN AUTO-REFRESH
-// ============================
-
-function startSilentRefreshTimer(expiresIn) {
-    if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
-    // Refresh 5 minutes before expiry
-    const refreshMs = Math.max((expiresIn - 300) * 1000, 30000);
-    silentRefreshTimer = setTimeout(() => trySilentRefresh(), refreshMs);
-    console.log(`[CardVault] Silent refresh scheduled in ${Math.round(refreshMs / 60000)} min`);
-}
-
-function trySilentRefresh() {
-    console.log('[CardVault] Attempting silent token refresh...');
-
-    // Use GIS with prompt:'' for silent refresh (no user interaction)
-    if (window.google?.accounts?.oauth2) {
-        if (!gisTokenClient) initGisTokenClient();
-        if (gisTokenClient) {
-            gisTokenClient.requestAccessToken({ prompt: '' });
-            return;
-        }
-    }
-
-    // GIS not available — can't silently refresh
-    console.log('[CardVault] GIS not available for silent refresh');
-}
-
-// ============================
-// 📧 GMAIL API
-// ============================
-
-async function gmailFetch(endpoint, token) {
-    const res = await fetch(`https://www.googleapis.com/gmail/v1/users/me/${endpoint}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.status === 401) {
-        clearGmailToken();
-        throw new Error('Session expired. Please login again.');
-    }
-    if (!res.ok) throw new Error(`Gmail API error: ${res.status}`);
-    return res.json();
-}
-
-async function getGmailProfile(token) {
-    return gmailFetch('profile', token);
-}
-
-async function searchEmails(token, afterTimestamp) {
-    // Gmail supports after:EPOCH_SECONDS for precise time filtering
-    let afterParam;
-    if (afterTimestamp) {
-        afterParam = Math.floor(afterTimestamp / 1000);
-    } else {
-        const months = getFetchRangeMonths();
-        if (months === 0) {
-            // "All" — no date filter
-            afterParam = 0;
-        } else {
-            const rangeStart = new Date();
-            rangeStart.setMonth(rangeStart.getMonth() - months);
-            afterParam = Math.floor(rangeStart.getTime() / 1000);
-        }
-    }
-
-    const afterFilter = afterParam > 0 ? ` after:${afterParam}` : '';
-    const query = encodeURIComponent(`from:(rupay@truztee.com OR rupay@golftripz.com) subject:"Booking ID"${afterFilter}`);
-    
-    // Paginate through all results (Gmail max 200 per page, supports nextPageToken)
-    let allMessages = [];
-    let pageToken = null;
-    let page = 0;
-    do {
-        page++;
-        let url = `messages?q=${query}&maxResults=200`;
-        if (pageToken) url += `&pageToken=${pageToken}`;
-        const result = await gmailFetch(url, token);
-        const msgs = result.messages || [];
-        allMessages = allMessages.concat(msgs);
-        pageToken = result.nextPageToken || null;
-    } while (pageToken && page < 10); // Safety cap: max 10 pages = 2000 emails
-
-    return { messages: allMessages };
-}
-
-function getLastFetchTime() {
-    const t = localStorage.getItem(LAST_FETCH_TIME_KEY);
-    return t ? parseInt(t) : null;
-}
-
-function saveLastFetchTime() {
-    localStorage.setItem(LAST_FETCH_TIME_KEY, String(Date.now()));
-}
-
-async function getEmailBody(messageId, token) {
-    const msg = await gmailFetch(`messages/${messageId}?format=full`, token);
-    return extractBody(msg);
-}
-
-function extractBody(message) {
-    let body = '';
-    let rawHtml = '';
-    const payload = message.payload;
-
-    // Get subject from headers
-    let subject = '';
-    if (payload.headers) {
-        const subjectHeader = payload.headers.find(h => h.name.toLowerCase() === 'subject');
-        if (subjectHeader) subject = subjectHeader.value;
-    }
-
-    // Helper to find HTML in parts
-    function findHtml(parts) {
-        for (const part of parts) {
-            if (part.mimeType === 'text/html' && part.body && part.body.data) {
-                return decodeBase64Url(part.body.data);
-            }
-            if (part.parts) {
-                const found = findHtml(part.parts);
-                if (found) return found;
-            }
-        }
-        return '';
-    }
-
-    // Extract body
-    if (payload.mimeType === 'text/html' && payload.body && payload.body.data) {
-        rawHtml = decodeBase64Url(payload.body.data);
-        body = stripHtml(rawHtml);
-    } else if (payload.body && payload.body.data) {
-        body = decodeBase64Url(payload.body.data);
-    } else if (payload.parts) {
-        rawHtml = findHtml(payload.parts);
-        body = rawHtml ? stripHtml(rawHtml) : '';
-    }
-
-    return { subject, body, rawHtml };
-}
-
-function decodeBase64Url(data) {
-    try {
-        const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
-        return decodeURIComponent(atob(base64).split('').map(c =>
-            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-        ).join(''));
-    } catch {
-        return atob(data.replace(/-/g, '+').replace(/_/g, '/'));
-    }
-}
-
-function stripHtml(html) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
-}
-
-// Parse HTML email to extract structured fields from the table
-function parseHtmlEmail(html) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    const fields = {};
-
-    // Extract key-value pairs from table rows: <td>Label:</td><td>Value</td>
-    const rows = tmp.querySelectorAll('tr');
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length >= 2) {
-            const label = (cells[0].textContent || '').trim().replace(/:$/, '').toLowerCase();
-            const value = (cells[1].textContent || '').trim();
-            if (label && value) fields[label] = value;
-        }
-    });
-
-    return fields;
-}
-
-// Format timestamp (ms) → "16th Mar, 8:30 PM"
-function formatTimestampDate(ts, includeTime) {
-    if (!ts) return '—';
-    const d = new Date(ts);
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const day = d.getDate();
-    const month = months[d.getMonth()];
-    const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
-        : (day === 2 || day === 22) ? 'nd'
-        : (day === 3 || day === 23) ? 'rd' : 'th';
-    const yr = "'" + String(d.getFullYear()).slice(-2);
-    let result = `${day}${suffix} ${month} ${yr}`;
-    if (includeTime) {
-        let h = d.getHours(), ampm = 'AM';
-        if (h >= 12) { ampm = 'PM'; if (h > 12) h -= 12; }
-        if (h === 0) h = 12;
-        const m = String(d.getMinutes()).padStart(2, '0');
-        result += `, ${h}:${m} ${ampm}`;
-    }
-    return result;
-}
-
-// Parse "16-Mar-2026" or "16-Mar-26" → Date object (for sorting)
-function parseDateStr(dateStr) {
-    if (!dateStr || dateStr === '—') return 0;
-    const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-    const m = dateStr.match(/(\d{1,2})[- ](\w{3})[- ]?(\d{2,4})?/);
-    if (!m) return 0;
-    const day = parseInt(m[1]);
-    const mon = months[m[2].toLowerCase()] ?? 0;
-    let year = m[3] ? parseInt(m[3]) : new Date().getFullYear();
-    if (year < 100) year += 2000;
-    return new Date(year, mon, day).getTime();
-}
-
-// Format "16-Mar-2026" → "16th Mar '26"
-function formatCouponDate(dateStr) {
-    if (!dateStr || dateStr === '—') return '—';
-    const parts = dateStr.match(/(\d{1,2})[- ](\w+)[- ]?(\d{2,4})?/);
-    if (!parts) return dateStr;
-    const day = parseInt(parts[1]);
-    const month = parts[2];
-    let yearStr = '';
-    if (parts[3]) {
-        let yr = parseInt(parts[3]);
-        if (yr < 100) yr += 2000;
-        yearStr = " '" + String(yr).slice(-2);
-    }
-    const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
-        : (day === 2 || day === 22) ? 'nd'
-        : (day === 3 || day === 23) ? 'rd' : 'th';
-    return `${day}${suffix} ${month}${yearStr}`;
-}
-
-// ============================
-// 🎫 COUPON PARSING
-// ============================
-
-function parseCoupon(subject, body, rawHtml) {
-    // Extract booking ID from subject
-    let booking = subject;
-    const bookingMatch = subject.match(/Booking\s*ID\s*[:\-]?\s*([A-Za-z0-9\-]+)/i);
-    if (bookingMatch) booking = bookingMatch[1];
-
-    let category = '—';
-    let dateStr = '—';
-    let coupon = null;
-    let couponPending = false;
-
-    // If we have raw HTML, parse the table structure directly
-    if (rawHtml) {
-        const fields = parseHtmlEmail(rawHtml);
-
-        // Extract Service Provider
-        if (fields['service provider']) category = fields['service provider'];
-
-        // Extract Date of Issue
-        if (fields['date of issue']) dateStr = fields['date of issue'];
-
-        // Extract Coupon Code
-        const rawCoupon = fields['coupon code'] || '';
-        if (rawCoupon) {
-            if (/will be sent|24.?48|pending|processing|blank/i.test(rawCoupon)) {
-                couponPending = true;
-            } else if (rawCoupon.toUpperCase() === 'NA' || rawCoupon === '-' || rawCoupon.length < 3) {
-                couponPending = true;
-            } else {
-                coupon = rawCoupon;
-            }
-        }
-
-        // Fallback: booking ID from body fields
-        if (!bookingMatch && fields['booking id']) booking = fields['booking id'];
-    }
-
-    // Fallback to plain text parsing (reply emails often have coupon in body text)
-    // This runs even if couponPending is true — because reply emails contain the actual code
-    // in the body while the quoted original email says "will be sent in 24-48 hours"
-    if (!coupon && body) {
-        // FIRST: Try specific pin pattern (most reliable — e.g., "1007620045528921/pin:2794")
-        const pinMatch = body.match(/(\d{8,}\/pin:\d+)/i);
-        if (pinMatch) {
-            coupon = pinMatch[1].trim();
-            couponPending = false;
-        }
-        // SECOND: Try alphanumeric codes (at least 6 chars, no common words)
-        if (!coupon) {
-            // Find ALL "Coupon Code:" occurrences and pick the one with an actual code
-            const allMatches = [...body.matchAll(/Coupon\s*Code\s*[:\-]\s*([^\n\r]{1,60})/gi)];
-            for (const m of allMatches) {
-                const val = m[1].trim().split(/\s+/)[0]; // take first word/token
-                if (val && val.length >= 5 && /[0-9]/.test(val) && !/will|sent|pending|hours|processing/i.test(val)) {
-                    coupon = val;
-                    couponPending = false;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Fallback: extract category from body text if not found in HTML table
-    if ((!category || category === '—') && body) {
-        const spMatch = body.match(/Service\s*Provider\s*[:\-]\s*(.+)/i);
-        if (spMatch) {
-            const sp = spMatch[1].trim().replace(/\s+/g, ' ');
-            if (sp && sp.length > 1) category = sp;
-        }
-    }
-
-    // Fallback: extract date from body text
-    if ((!dateStr || dateStr === '—') && body) {
-        const dateMatch = body.match(/Date\s*(?:of\s*Issue)?\s*[:\-]\s*(\d{1,2}[\-\s]\w{3}[\-\s]\d{2,4})/i);
-        if (dateMatch) dateStr = dateMatch[1].trim();
-    }
-
-    // Clean up coupon
-    if (coupon) coupon = coupon.replace(/^[:\-\s]+|[:\-\s]+$/g, '');
-    if (coupon && coupon.length < 3) coupon = null;
-
-    return { booking, coupon, category, dateStr, couponPending };
-}
-
-// ============================
-// 🎨 UI
-// ============================
-
-const gmailLoginBtn = document.getElementById('gmailLoginBtn');
-const fetchCouponsBtn = document.getElementById('fetchCouponsBtn');
-const gmailLogoutBtn = document.getElementById('gmailLogoutBtn');
-
-function initCouponsTab() {
-    updateCouponUI();
-    // Show cached coupons from localStorage
-    const cached = loadCachedCoupons();
-    if (cached.length > 0) {
-        lastFetchedCoupons = cached;
-        renderCouponTable(cached);
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
-
-function updateCouponUI() {
-    const token = getGmailToken();
-    const authSection = document.getElementById('couponAuthSection');
-    const loggedInSection = document.getElementById('couponLoggedIn');
-    const couponError = document.getElementById('couponError');
-    couponError.style.display = 'none';
-
-    // Show/hide setup section based on whether client ID exists
-    const setupSection = document.getElementById('couponSetupSection');
-    const clientIdInput = document.getElementById('gmailClientIdInput');
-    const clientId = getGmailClientId();
-    if (!clientId) {
-        setupSection.style.display = 'block';
-        authSection.style.display = 'none';
-    } else {
-        setupSection.style.display = 'none';
-        clientIdInput.value = clientId;
-    }
-
-    if (token && clientId) {
-        authSection.style.display = 'none';
-        loggedInSection.style.display = 'block';
-        // Try to get user email
-        getGmailProfile(token).then(profile => {
-            document.getElementById('gmailUser').textContent = `✅ ${profile.emailAddress}`;
-        }).catch(() => {
-            document.getElementById('gmailUser').textContent = '✅ Connected';
-        });
-    } else {
-        authSection.style.display = 'block';
-        loggedInSection.style.display = 'none';
-    }
-}
-
-// Helper: update progress bar with forced repaint
-function updateProgress(bar, textEl, detailEl, pct, text, detail) {
-    bar.style.width = pct + '%';
-    if (text) textEl.textContent = text;
-    if (detail !== undefined) detailEl.textContent = detail;
-}
-
-async function fetchCoupons(forceFullRefresh) {
-    const token = getGmailToken();
-    if (!token) { showCouponError('Not logged in. Please login first.'); return; }
-
-    const loading = document.getElementById('couponLoading');
-    const results = document.getElementById('couponResults');
-    const empty = document.getElementById('couponEmpty');
-    const error = document.getElementById('couponError');
-
-    loading.style.display = 'block';
-    results.style.display = 'none';
-    empty.style.display = 'none';
-    error.style.display = 'none';
-
-    const progressBar = document.getElementById('couponProgressBar');
-    const progressText = document.getElementById('couponProgressText');
-    const progressDetail = document.getElementById('couponProgressDetail');
-    progressBar.style.transition = 'none'; // disable transition for instant updates
-    progressBar.style.width = '0%';
-    progressBar.offsetHeight; // force reflow
-    progressBar.style.transition = 'width 0.15s linear';
-    progressText.textContent = '⏳ Searching Gmail...';
-    progressDetail.textContent = '';
-
-    // Decide: incremental or full refresh
-    const lastFetch = forceFullRefresh ? null : getLastFetchTime();
-    const isIncremental = !!lastFetch;
-    const existingCached = isIncremental ? loadCachedCoupons() : [];
-
-    if (isIncremental) {
-        const ago = formatTimestampDate(lastFetch, true);
-        progressDetail.textContent = `Incremental since ${ago}`;
-    } else {
-        const fetchMonths = getFetchRangeMonths();
-        if (fetchMonths === 0) {
-            progressDetail.textContent = 'Full scan — all time';
-        } else {
-            const rangeDate = new Date();
-            rangeDate.setMonth(rangeDate.getMonth() - fetchMonths);
-            const rangeStr = rangeDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-            progressDetail.textContent = `Full scan — since ${rangeStr} (${fetchMonths}M)`;
-        }
-    }
-
-    try {
-        const searchResult = await searchEmails(token, lastFetch);
-        const messages = searchResult.messages || [];
-
-        if (messages.length === 0 && isIncremental) {
-            // No new emails — just show cached data
-            loading.style.display = 'none';
-            if (existingCached.length > 0) {
-                lastFetchedCoupons = existingCached;
-                renderCouponTable(existingCached);
-                saveLastFetchTime();
-                if (typeof showToast === 'function') showToast('✅ No new coupons — all up to date!');
-            } else {
-                empty.style.display = 'block';
-            }
-            return;
-        }
-
-        if (messages.length === 0) {
-            loading.style.display = 'none';
-            empty.style.display = 'block';
-            return;
-        }
-
-        const label = isIncremental ? 'new emails' : 'emails';
-        updateProgress(progressBar, progressText, progressDetail, 5,
-            `📧 Found ${messages.length} ${label}. Reading...`, '');
-
-        const allParsed = [];
-        const BATCH_SIZE = 5; // Fetch 5 emails in parallel (~5x faster)
-        for (let i = 0; i < messages.length; i += BATCH_SIZE) {
-            const batch = messages.slice(i, i + BATCH_SIZE);
-            const results = await Promise.allSettled(
-                batch.map(async (msg) => {
-                    const { subject, body, rawHtml } = await getEmailBody(msg.id, token);
-                    return parseCoupon(subject, body, rawHtml);
-                })
-            );
-            for (const r of results) {
-                if (r.status === 'fulfilled') allParsed.push(r.value);
-            }
-            // Update progress after each batch
-            const done = Math.min(i + BATCH_SIZE, messages.length);
-            const pct = 5 + Math.round((done / messages.length) * 90);
-            const last = results.findLast(r => r.status === 'fulfilled');
-            const lastParsed = last?.value;
-            const dateInfo = lastParsed?.dateStr && lastParsed.dateStr !== '—' ? formatCouponDate(lastParsed.dateStr) : '';
-            const catInfo = lastParsed?.category && lastParsed.category !== '—' ? lastParsed.category : '';
-            updateProgress(progressBar, progressText, progressDetail, pct,
-                `📨 ${done} / ${messages.length} ${label}`,
-                [catInfo, dateInfo].filter(Boolean).join(' · '));
-            // Yield to browser for repaint
-            await new Promise(r => setTimeout(r, 0));
-        }
-
-        updateProgress(progressBar, progressText, progressDetail, 100, '✅ Processing complete!', '');
-
-        // Deduplicate: merge new results with cached (new takes priority)
-        const byBooking = new Map();
-        // First add existing cached (if incremental)
-        for (const c of existingCached) {
-            byBooking.set(c.booking, c);
-        }
-        // Then add/overwrite with newly fetched (new coupon > pending)
-        for (const p of allParsed) {
-            const existing = byBooking.get(p.booking);
-            if (!existing || (p.coupon && !existing.coupon)) {
-                byBooking.set(p.booking, p);
-            }
-        }
-        const coupons = Array.from(byBooking.values());
-
-        // Sort by date descending (latest on top)
-        coupons.sort((a, b) => {
-            const da = parseDateStr(a.dateStr);
-            const db = parseDateStr(b.dateStr);
-            return db - da; // descending
-        });
-
-        // Small delay to let user see 100%
-        await new Promise(r => setTimeout(r, 300));
-        loading.style.display = 'none';
-
-        if (coupons.length === 0) {
-            empty.style.display = 'block';
-            return;
-        }
-
-        // Auto-mark coupons older than 2 months as used
-        const twoMonthsAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
-        const usedCoupons = getUsedCoupons();
-        let autoMarkedCount = 0;
-        for (const c of coupons) {
-            if (c.coupon && !usedCoupons[c.booking]) {
-                const couponDate = parseDateStr(c.dateStr);
-                if (couponDate > 0 && couponDate < twoMonthsAgo) {
-                    markCouponUsed(c.booking, c);
-                    autoMarkedCount++;
-                }
-            }
-        }
-
-        // Save fetch time, cache, and render
-        saveLastFetchTime();
-        lastFetchedCoupons = coupons;
-        saveCachedCoupons(coupons);
-        renderCouponTable(coupons);
-
-        const newCount = allParsed.length;
-        const toastMsg = isIncremental
-            ? `🔄 ${newCount} new coupon${newCount !== 1 ? 's' : ''} added!`
-            : '🔄 Coupons updated!';
-        if (typeof showToast === 'function') showToast(toastMsg);
-
-    } catch (err) {
-        loading.style.display = 'none';
-        showCouponError(err.message);
-    }
-}
-
-let lastFetchedCoupons = [];
-
-function renderCouponTable(coupons) {
-    const results = document.getElementById('couponResults');
-    const tbody = document.getElementById('couponTableBody');
-    const usedCoupons = getUsedCoupons();
-
-    // Sort all coupons by date descending (latest on top)
-    const sorted = [...coupons].sort((a, b) => parseDateStr(b.dateStr) - parseDateStr(a.dateStr));
-
-    // Split into active and used (attach usedOn date)
-    const active = sorted.filter(c => !usedCoupons[c.booking]);
-    const used = sorted.filter(c => usedCoupons[c.booking]).map(c => ({
-        ...c,
-        _usedAt: usedCoupons[c.booking].usedAt,
-        usedOn: formatTimestampDate(usedCoupons[c.booking].usedAt)
-    }));
-
-    function buildRow(c, isUsed) {
-        const isPending = !c.coupon;
-        const couponColor = isPending ? '#c89a20' : isUsed ? '#e05070' : '#00d26a';
-        // Detect coupon+pin pattern like "1001460118646006/pin:132832"
-        const pinPattern = /^(.+)\/pin[:\s]*(.+)$/i;
-        const pinMatch = !isPending && c.coupon ? c.coupon.match(pinPattern) : null;
-
-        let couponCell;
-        if (isPending) {
-            couponCell = `<span style="color:#c89a20;font-style:italic;font-weight:600;font-size:0.85rem;">⏳ Pending</span>`;
-        } else if (pinMatch) {
-            const codeOnly = pinMatch[1].trim();
-            const pinOnly = pinMatch[2].trim();
-            const bgColor = isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)';
-            couponCell = `<span class="coupon-pin-wrapper" style="display:inline-flex;align-items:center;gap:0;flex-wrap:wrap;">` +
-                `<code class="coupon-code-part" data-code="${escapeHtmlCoupon(codeOnly)}" title="Click to copy coupon code" style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${bgColor};padding:3px 8px;border-radius:4px 0 0 4px;cursor:pointer;transition:all 0.2s;">${escapeHtmlCoupon(codeOnly)}</code>` +
-                `<code class="coupon-pin-part" data-pin="${escapeHtmlCoupon(pinOnly)}" title="Click to copy PIN" style="color:${isUsed ? '#e05070' : '#f0c040'};font-weight:700;font-size:0.82rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.08)' : 'rgba(240,192,64,0.12)'};padding:3px 8px;border-radius:0 4px 4px 0;border-left:1.5px solid ${isUsed ? 'rgba(224,80,112,0.2)' : 'rgba(240,192,64,0.25)'};cursor:pointer;transition:all 0.2s;">pin:${escapeHtmlCoupon(pinOnly)}</code>` +
-                `</span>`;
-        } else {
-            couponCell = `<code style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)'};padding:3px 8px;border-radius:4px;">${escapeHtmlCoupon(c.coupon)}</code>`;
-        }
-        const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-        const couponAge = parseDateStr(c.dateStr);
-        const isOlderThan1Month = couponAge > 0 && couponAge < oneMonthAgo;
-        const pendingAction = (isPending && !isUsed && isOlderThan1Month)
-            ? `<button class="coupon-action-btn mark-used-btn" data-booking="${escapeHtmlCoupon(c.booking)}" title="Mark as not available" style="font-size:0.7rem;">❌ N/A</button>`
-            : '';
-        const actionBtn = isPending ? pendingAction : isUsed
-            ? `<button class="coupon-action-btn unmark-used-btn" data-booking="${escapeHtmlCoupon(c.booking)}" title="Mark as unused">↩️</button>`
-            : `<button class="coupon-action-btn mark-used-btn" data-booking="${escapeHtmlCoupon(c.booking)}" title="Mark as used">✅</button>`;
-        const copyBtn = (isPending || isUsed) ? '' : `<button class="copy-coupon-btn" data-code="${escapeHtmlCoupon(c.coupon)}" title="Copy">📋</button>`;
-        const rowStyle = isPending ? ' style="opacity:0.6;"' : isUsed ? ' style="opacity:0.5;"' : '';
-        const usedOnCell = isUsed && c.usedOn
-            ? `<span style="font-size:0.7rem;color:var(--success);font-style:italic;">used ${c.usedOn}</span>`
-            : '';
-        return `<tr${rowStyle}>
-            <td style="font-weight:600;color:var(--text-primary);">${escapeHtmlCoupon(c.category)}</td>
-            <td style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;">${escapeHtmlCoupon(formatCouponDate(c.dateStr))}</td>
-            <td style="font-size:0.8rem;">${escapeHtmlCoupon(c.booking)}</td>
-            <td>${couponCell}${usedOnCell ? '<br>' + usedOnCell : ''}</td>
-            <td style="white-space:nowrap;">${copyBtn}${actionBtn}</td>
-        </tr>`;
-    }
-
-    const activeCount = active.filter(c => c.coupon).length;
-    const pendingCount = active.filter(c => !c.coupon).length;
-    let countText = `🎫 ${activeCount} coupon${activeCount !== 1 ? 's' : ''}`;
-    if (pendingCount > 0) countText += ` + ${pendingCount} pending`;
-    document.getElementById('couponCount').textContent = countText;
-
-    // Active section heading (same height as Used section)
-    let html = `<tr><td colspan="5" style="padding:8px 0 10px;border:none;">
-        <div style="background:var(--bg-card);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:44px;">
-            <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
-                🎫 Active (${activeCount}${pendingCount > 0 ? ` + ${pendingCount} pending` : ''})
-            </span>
-        </div>
-    </td></tr>`;
-    html += active.map(c => buildRow(c, false)).join('');
-
-    if (used.length > 0) {
-        // Filter used coupons by coupon date (date of issue), not when marked
-        const selectedMonths = getSelectedMonths();
-        let filteredUsed;
-        if (selectedMonths === 0) {
-            filteredUsed = used; // Show all
-        } else {
-            const rangeMs = selectedMonths * 30 * 24 * 60 * 60 * 1000;
-            const cutoff = Date.now() - rangeMs;
-            filteredUsed = used.filter(c => {
-                const couponDate = parseDateStr(c.dateStr);
-                return couponDate >= cutoff;
-            });
-        }
-
-        const rangeOptions = [1,3,6,12,0];
-        const rangeBtns = rangeOptions.map(m =>
-            `<button class="range-btn ${m === selectedMonths ? 'active' : ''}" data-months="${m}">${m === 0 ? 'All' : m + 'M'}</button>`
-        ).join('');
-
-        html += `<tr><td colspan="5" style="padding:28px 0 10px;border:none;">
-            <div style="background:var(--bg-card);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:44px;">
-                <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:700;">
-                    ✅ Used (${filteredUsed.length})
-                </span>
-                <div style="display:flex;gap:4px;">${rangeBtns}</div>
-            </div>
-        </td></tr>`;
-        html += filteredUsed.map(c => buildRow(c, true)).join('');
-    }
-
-    tbody.innerHTML = html;
-    results.style.display = 'block';
-}
-
-function showCouponError(msg) {
-    const error = document.getElementById('couponError');
-    error.textContent = '❌ ' + msg;
-    error.style.display = 'block';
-}
-
-function escapeHtmlCoupon(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}
-
-// ============================
-// 📋 EVENTS
-// ============================
-
-// Save Client ID
-document.getElementById('saveClientIdBtn').addEventListener('click', () => {
-    const input = document.getElementById('gmailClientIdInput');
-    const val = input.value.trim();
-    if (!val || !val.includes('.apps.googleusercontent.com')) {
-        showCouponError('Invalid Client ID. It should end with .apps.googleusercontent.com');
-        return;
-    }
-    saveGmailClientId(val);
-    updateCouponUI();
-    if (typeof showToast === 'function') showToast('💾 Client ID saved!');
-});
-
-// Show setup section
-document.getElementById('setupClientIdBtn').addEventListener('click', () => {
-    const setup = document.getElementById('couponSetupSection');
-    setup.style.display = setup.style.display === 'none' ? 'block' : 'none';
-});
-
-gmailLoginBtn.addEventListener('click', startGmailLogin);
-
-fetchCouponsBtn.addEventListener('click', () => fetchCoupons(false));
-document.getElementById('fullRefreshBtn').addEventListener('click', () => fetchCoupons(true));
-
-gmailLogoutBtn.addEventListener('click', () => {
-    // Revoke GIS token if available
-    const token = localStorage.getItem(GMAIL_TOKEN_KEY);
-    if (token && window.google?.accounts?.oauth2) {
-        google.accounts.oauth2.revoke(token, () => {
-            console.log('[CardVault] Token revoked via GIS');
-        });
-    }
-    if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
-    clearGmailToken();
-    updateCouponUI();
-    // Keep cached coupons visible — only hide loading/empty states
-    document.getElementById('couponLoading').style.display = 'none';
-    document.getElementById('couponEmpty').style.display = 'none';
-    // Re-render cached coupons so they stay visible
-    const cached = loadCachedCoupons();
-    if (cached.length > 0) {
-        lastFetchedCoupons = cached;
-        renderCouponTable(cached);
-    }
-    if (typeof showToast === 'function') showToast('📧 Gmail disconnected. Cached coupons still visible.');
-});
-
-// Copy coupon code + Mark used / Unmark used
-document.getElementById('couponTableBody').addEventListener('click', (e) => {
-    // Range button clicks (inside Used heading)
-    const rangeBtn = e.target.closest('.range-btn');
-    if (rangeBtn) {
-        const months = parseInt(rangeBtn.dataset.months);
-        setSelectedMonths(months);
-        renderCouponTable(lastFetchedCoupons);
-        return;
-    }
-    // Click on coupon code part (separate copy)
-    const codePart = e.target.closest('.coupon-code-part');
-    if (codePart) {
-        navigator.clipboard.writeText(codePart.dataset.code).then(() => {
-            codePart.classList.add('copied-flash');
-            if (typeof showToast === 'function') showToast('📋 Coupon code copied!');
-            setTimeout(() => codePart.classList.remove('copied-flash'), 1200);
-        });
-        return;
-    }
-    // Click on PIN part (separate copy)
-    const pinPart = e.target.closest('.coupon-pin-part');
-    if (pinPart) {
-        navigator.clipboard.writeText(pinPart.dataset.pin).then(() => {
-            pinPart.classList.add('copied-flash');
-            if (typeof showToast === 'function') showToast('📌 PIN copied!');
-            setTimeout(() => pinPart.classList.remove('copied-flash'), 1200);
-        });
-        return;
-    }
-    const copyBtn = e.target.closest('.copy-coupon-btn');
-    if (copyBtn) {
-        navigator.clipboard.writeText(copyBtn.dataset.code).then(() => {
-            copyBtn.textContent = '✅';
-            if (typeof showToast === 'function') showToast('📋 Full coupon copied!');
-            setTimeout(() => copyBtn.textContent = '📋', 1200);
-        });
-        return;
-    }
-    const markBtn = e.target.closest('.mark-used-btn');
-    if (markBtn) {
-        const bookingId = markBtn.dataset.booking;
-        const couponData = lastFetchedCoupons.find(c => c.booking === bookingId);
-        if (couponData) {
-            markCouponUsed(bookingId, couponData);
-            renderCouponTable(lastFetchedCoupons);
-            if (typeof showToast === 'function') showToast('✅ Marked as used');
-        }
-        return;
-    }
-    const unmarkBtn = e.target.closest('.unmark-used-btn');
-    if (unmarkBtn) {
-        unmarkCouponUsed(unmarkBtn.dataset.booking);
-        renderCouponTable(lastFetchedCoupons);
-        if (typeof showToast === 'function') showToast('↩️ Moved back to active');
-    }
-});
-
-
-// Fetch range ⚙️ dropdown toggle
-const fetchRangeDropdown = document.getElementById('fetchRangeDropdown');
-document.getElementById('fetchRangeToggle').addEventListener('click', (e) => {
-    e.stopPropagation();
-    fetchRangeDropdown.style.display = fetchRangeDropdown.style.display === 'none' ? 'block' : 'none';
-});
-// Close dropdown on outside click
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('#fetchRangeDropdown') && !e.target.closest('#fetchRangeToggle')) {
-        fetchRangeDropdown.style.display = 'none';
-    }
-});
-// Fetch range button clicks inside dropdown
-fetchRangeDropdown.addEventListener('click', (e) => {
-    const btn = e.target.closest('.fetch-range-btn');
-    if (!btn) return;
-    const months = parseInt(btn.dataset.months);
-    setFetchRangeMonths(months);
-    fetchRangeDropdown.querySelectorAll('.fetch-range-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    localStorage.removeItem(LAST_FETCH_TIME_KEY);
-    fetchRangeDropdown.style.display = 'none';
-});
-
-// ============================
-// 📊 ANALYTICS
-// ============================
-
-// Category → worth mapping (case-insensitive matching)
-const COUPON_WORTH = {
-    'lakme': 1500,
-    'uber': 100,
-    'hotstar': 1500,
-    'disney': 1500,
-    'prime': 1500,
-    'amazon prime': 1500,
-    'zee5': 1500,
-    'sonyliv': 1500,
-    'sony liv': 1500,
-    'thyrocare': 1500,
-    'srl': 1500,
-    'srl diagnostic': 1500,
-    'apollo pharmacy': 250,
-    'apollo': 250,
-    'kalyan': 2000,
-    'kalyan jewellers': 2000,
-    'decathlon': 500,
-    'cult.fit': 1200,
-    'cultfit': 1200,
-    'cult': 1200,
-    'myntra': 500,
-    'nykaa': 500,
-    'bigbasket': 250,
-    'big basket': 250,
-    'jockey': 250,
-    'swiggy one': 100,
-    'swiggy instamart': 250,
-    'tata cliq': 500,
-    'tatacliq': 500,
-    'reliance digital': 500,
-    'blinkit': 250,
-    'four fountains': 1500,
-    'four fountains de-stress spa': 1500,
-    'gaana': 600,
-    'flipkart': 250,
-    'aromathai': 1500,
-    'aromathai day spa': 1500,
-    'aroma thai': 1500,
-};
-
-function getCouponWorth(category) {
-    if (!category || category === '—') return 0;
-    const cat = category.toLowerCase().trim();
-    // Exact match first
-    if (COUPON_WORTH[cat] !== undefined) return COUPON_WORTH[cat];
-    // Partial match
-    for (const [key, val] of Object.entries(COUPON_WORTH)) {
-        if (cat.includes(key) || key.includes(cat)) return val;
-    }
-    return 0;
-}
-
-function formatIndian(num) {
-    const n = String(num).replace(/\D/g, '');
-    if (!n) return '0';
-    const last3 = n.slice(-3);
-    const rest = n.slice(0, -3);
-    if (!rest) return last3;
-    return rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
-}
-
-function showAnalyticsModal() {
-    const modal = document.getElementById('analyticsModal');
-    modal.style.display = 'flex';
-    // Default range: earliest coupon → today
-    const allCoupons = lastFetchedCoupons || [];
-    if (allCoupons.length > 0) {
-        const dates = allCoupons.map(c => parseDateStr(c.dateStr)).filter(d => d > 0);
-        const minDate = new Date(Math.min(...dates));
-        const maxDate = new Date();
-        document.getElementById('analyticsFrom').value = minDate.toISOString().split('T')[0];
-        document.getElementById('analyticsTo').value = maxDate.toISOString().split('T')[0];
-        runAnalytics();
-    }
-}
-
-function runAnalytics() {
-    const fromDate = new Date(document.getElementById('analyticsFrom').value);
-    const toDate = new Date(document.getElementById('analyticsTo').value);
-    toDate.setHours(23, 59, 59, 999);
-    const allCoupons = lastFetchedCoupons || [];
-    const content = document.getElementById('analyticsContent');
-
-    if (isNaN(fromDate) || isNaN(toDate)) {
-        content.innerHTML = '<p style="color:var(--accent);text-align:center;">❌ Invalid date range</p>';
-        return;
-    }
-
-    // Filter coupons in date range (only those with actual coupon codes)
-    const filtered = allCoupons.filter(c => {
-        const d = parseDateStr(c.dateStr);
-        return d >= fromDate.getTime() && d <= toDate.getTime() && c.coupon;
-    });
-
-    if (filtered.length === 0) {
-        content.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:2rem 0;">No coupons found in this date range.</p>';
-        return;
-    }
-
-    // Group by category
-    const catMap = {};
-    let totalWorth = 0;
-    for (const c of filtered) {
-        const cat = c.category && c.category !== '—' ? c.category : 'Unknown';
-        if (!catMap[cat]) catMap[cat] = { count: 0, worth: 0 };
-        catMap[cat].count++;
-        const worth = getCouponWorth(cat);
-        catMap[cat].worth += worth;
-        totalWorth += worth;
-    }
-
-    // Sort by worth desc, then count desc
-    const categories = Object.entries(catMap).sort((a, b) => b[1].worth - a[1].worth || b[1].count - a[1].count);
-
-    // Build summary cards
-    let html = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.8rem;margin-bottom:1.2rem;">
-            <div class="analytics-card">
-                <div class="analytics-label">Total Coupons</div>
-                <div class="analytics-value" style="color:var(--accent);">${filtered.length}</div>
-            </div>
-            <div class="analytics-card">
-                <div class="analytics-label">Categories</div>
-                <div class="analytics-value" style="color:var(--gold);">${categories.length}</div>
-            </div>
-            <div class="analytics-card">
-                <div class="analytics-label">Total Worth</div>
-                <div class="analytics-value" style="color:var(--success);">₹${formatIndian(totalWorth)}</div>
-            </div>
-        </div>
-    `;
-
-    // Category breakdown table
-    html += `<table class="coupon-table" style="font-size:0.85rem;">
-        <thead><tr>
-            <th>Category</th>
-            <th style="text-align:center;">Count</th>
-            <th style="text-align:right;">Unit</th>
-            <th style="text-align:right;">Total</th>
-        </tr></thead><tbody>`;
-
-    for (const [cat, data] of categories) {
-        const unitWorth = getCouponWorth(cat);
-        const unitStr = unitWorth > 0 ? `₹${formatIndian(unitWorth)}` : '<span style="color:var(--text-muted);">—</span>';
-        const totalStr = data.worth > 0 ? `₹${formatIndian(data.worth)}` : '<span style="color:var(--text-muted);">—</span>';
-        html += `<tr>
-            <td style="font-weight:600;color:var(--text-primary);">${escapeHtmlCoupon(cat)}</td>
-            <td style="text-align:center;">${data.count}</td>
-            <td style="text-align:right;font-size:0.8rem;">${unitStr}</td>
-            <td style="text-align:right;font-weight:700;color:var(--success);">${totalStr}</td>
-        </tr>`;
-    }
-
-    html += `<tr style="border-top:2px solid var(--border);">
-        <td style="font-weight:800;color:var(--text-primary);">Total</td>
-        <td style="text-align:center;font-weight:700;">${filtered.length}</td>
-        <td></td>
-        <td style="text-align:right;font-weight:800;color:var(--gold);font-size:1rem;">₹${formatIndian(totalWorth)}</td>
-    </tr>`;
-    html += '</tbody></table>';
-
-    // Unknown worth notice
-    const unknownCats = categories.filter(([cat]) => getCouponWorth(cat) === 0);
-    if (unknownCats.length > 0) {
-        html += `<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.8rem;">⚠️ Worth not mapped for: ${unknownCats.map(([c]) => c).join(', ')}</p>`;
-    }
-
-    content.innerHTML = html;
-}
-
-// Analytics modal events
-document.getElementById('analyticsBtn').addEventListener('click', showAnalyticsModal);
-document.getElementById('analyticsClose').addEventListener('click', () => {
-    document.getElementById('analyticsModal').style.display = 'none';
-});
-document.getElementById('analyticsModal').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('analyticsModal')) document.getElementById('analyticsModal').style.display = 'none';
-});
-document.getElementById('analyticsApply').addEventListener('click', runAnalytics);
-
-// ============================
-// 🚀 INIT
-// ============================
-handleOAuthCallback();
-initCouponsTab();
-
-// Start silent refresh timer if we already have a valid token
-(function initSilentRefresh() {
-    const expiry = localStorage.getItem(GMAIL_TOKEN_EXPIRY_KEY);
-    const token = localStorage.getItem(GMAIL_TOKEN_KEY);
-    if (token && expiry) {
-        const remainingSec = Math.floor((parseInt(expiry) - Date.now()) / 1000);
-        if (remainingSec > 60) {
-            startSilentRefreshTimer(remainingSec);
-        } else if (remainingSec > 0) {
-            // Token about to expire — refresh now
-            trySilentRefresh();
-        }
-    }
-})();
-// Initialize GIS when the library loads (it's async)
-function waitForGisAndInit() {
-    if (window.google?.accounts?.oauth2) {
-        const clientId = getGmailClientId();
-        if (clientId) {
-            initGisTokenClient();
-            console.log('[CardVault] GIS token client initialized');
-        }
-    } else {
-        // GIS not loaded yet — retry after 500ms (up to 10 seconds)
-        let retries = 0;
-        const poll = setInterval(() => {
-            retries++;
-            if (window.google?.accounts?.oauth2) {
-                clearInterval(poll);
-                const clientId = getGmailClientId();
-                if (clientId) {
-                    initGisTokenClient();
-                    console.log('[CardVault] GIS token client initialized (delayed)');
-                }
-            } else if (retries > 20) {
-                clearInterval(poll);
-                console.log('[CardVault] GIS library failed to load — using redirect fallback');
-            }
-        }, 500);
-    }
-}
-waitForGisAndInit();
-
-// Restore fetch range button from localStorage
-(function restoreFetchRange() {
-    const saved = getFetchRangeMonths();
-    const btn = document.querySelector(`.fetch-range-btn[data-months="${saved}"]`);
-    if (btn) {
-        document.querySelectorAll('.fetch-range-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-    }
-})();
