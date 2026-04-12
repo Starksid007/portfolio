@@ -770,9 +770,24 @@ function renderCouponTable(coupons) {
     function buildRow(c, isUsed) {
         const isPending = !c.coupon;
         const couponColor = isPending ? '#c89a20' : isUsed ? '#e05070' : '#00d26a';
-        const couponCell = isPending
-            ? `<span style="color:#c89a20;font-style:italic;font-weight:600;font-size:0.85rem;">⏳ Pending</span>`
-            : `<code style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)'};padding:3px 8px;border-radius:4px;">${escapeHtmlCoupon(c.coupon)}</code>`;
+        // Detect coupon+pin pattern like "1001460118646006/pin:132832"
+        const pinPattern = /^(.+)\/pin[:\s]*(.+)$/i;
+        const pinMatch = !isPending && c.coupon ? c.coupon.match(pinPattern) : null;
+
+        let couponCell;
+        if (isPending) {
+            couponCell = `<span style="color:#c89a20;font-style:italic;font-weight:600;font-size:0.85rem;">⏳ Pending</span>`;
+        } else if (pinMatch) {
+            const codeOnly = pinMatch[1].trim();
+            const pinOnly = pinMatch[2].trim();
+            const bgColor = isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)';
+            couponCell = `<span class="coupon-pin-wrapper" style="display:inline-flex;align-items:center;gap:0;flex-wrap:wrap;">` +
+                `<code class="coupon-code-part" data-code="${escapeHtmlCoupon(codeOnly)}" title="Click to copy coupon code" style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${bgColor};padding:3px 8px;border-radius:4px 0 0 4px;cursor:pointer;transition:all 0.2s;">${escapeHtmlCoupon(codeOnly)}</code>` +
+                `<code class="coupon-pin-part" data-pin="${escapeHtmlCoupon(pinOnly)}" title="Click to copy PIN" style="color:${isUsed ? '#e05070' : '#f0c040'};font-weight:700;font-size:0.82rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.08)' : 'rgba(240,192,64,0.12)'};padding:3px 8px;border-radius:0 4px 4px 0;border-left:1.5px solid ${isUsed ? 'rgba(224,80,112,0.2)' : 'rgba(240,192,64,0.25)'};cursor:pointer;transition:all 0.2s;">pin:${escapeHtmlCoupon(pinOnly)}</code>` +
+                `</span>`;
+        } else {
+            couponCell = `<code style="color:${couponColor};font-weight:700;font-size:0.95rem;letter-spacing:1px;background:${isUsed ? 'rgba(224,80,112,0.1)' : 'rgba(0,210,106,0.1)'};padding:3px 8px;border-radius:4px;">${escapeHtmlCoupon(c.coupon)}</code>`;
+        }
         const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
         const couponAge = parseDateStr(c.dateStr);
         const isOlderThan1Month = couponAge > 0 && couponAge < oneMonthAgo;
@@ -920,11 +935,31 @@ document.getElementById('couponTableBody').addEventListener('click', (e) => {
         renderCouponTable(lastFetchedCoupons);
         return;
     }
+    // Click on coupon code part (separate copy)
+    const codePart = e.target.closest('.coupon-code-part');
+    if (codePart) {
+        navigator.clipboard.writeText(codePart.dataset.code).then(() => {
+            codePart.classList.add('copied-flash');
+            if (typeof showToast === 'function') showToast('📋 Coupon code copied!');
+            setTimeout(() => codePart.classList.remove('copied-flash'), 1200);
+        });
+        return;
+    }
+    // Click on PIN part (separate copy)
+    const pinPart = e.target.closest('.coupon-pin-part');
+    if (pinPart) {
+        navigator.clipboard.writeText(pinPart.dataset.pin).then(() => {
+            pinPart.classList.add('copied-flash');
+            if (typeof showToast === 'function') showToast('📌 PIN copied!');
+            setTimeout(() => pinPart.classList.remove('copied-flash'), 1200);
+        });
+        return;
+    }
     const copyBtn = e.target.closest('.copy-coupon-btn');
     if (copyBtn) {
         navigator.clipboard.writeText(copyBtn.dataset.code).then(() => {
             copyBtn.textContent = '✅';
-            if (typeof showToast === 'function') showToast('📋 Coupon copied!');
+            if (typeof showToast === 'function') showToast('📋 Full coupon copied!');
             setTimeout(() => copyBtn.textContent = '📋', 1200);
         });
         return;
