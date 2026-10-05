@@ -68,8 +68,20 @@ function saveCachedCoupons(coupons) {
 function loadCachedCoupons() {
     try {
         const raw = localStorage.getItem(CACHED_COUPONS_KEY);
-        return raw ? JSON.parse(raw) : [];
+        const list = raw ? JSON.parse(raw) : [];
+        return list.map(normalizeCachedCoupon);
     } catch { return []; }
+}
+
+// Re-validate a cached entry with the current classifier. Entries saved by older code may hold a
+// status message (e.g. "Apologies for the delay...") in `coupon`; demote those to pending + note.
+function normalizeCachedCoupon(c) {
+    if (!c || !c.coupon) return c;
+    const cls = classifyCouponValue(c.coupon);
+    if (cls.coupon) {
+        return cls.coupon === c.coupon ? c : { ...c, coupon: cls.coupon };
+    }
+    return { ...c, coupon: null, couponPending: true, pendingNote: cls.note || c.pendingNote || null };
 }
 
 // ============================
@@ -245,6 +257,8 @@ async function getGmailProfile(token) {
     return gmailFetch('profile', token);
 }
 
+const RUPAY_BASE_QUERY = 'from:(rupay@truztee.com OR rupay@golftripz.com) subject:"Booking ID"';
+
 async function searchEmails(token, afterTimestamp) {
     // Gmail supports after:EPOCH_SECONDS for precise time filtering
     let afterParam;
@@ -263,7 +277,7 @@ async function searchEmails(token, afterTimestamp) {
     }
 
     const afterFilter = afterParam > 0 ? ` after:${afterParam}` : '';
-    const query = encodeURIComponent(`from:(rupay@truztee.com OR rupay@golftripz.com) subject:"Booking ID"${afterFilter}`);
+    const query = encodeURIComponent(`${RUPAY_BASE_QUERY}${afterFilter}`);
     
     // Paginate through all results (Gmail max 200 per page, supports nextPageToken)
     let allMessages = [];
@@ -282,6 +296,16 @@ async function searchEmails(token, afterTimestamp) {
     return { messages: allMessages };
 }
 
+// Find every RuPay email for one booking, regardless of date. Used to re-check pending coupons
+// whose follow-up email may have arrived before the last incremental fetch cut-off.
+async function searchEmailsByBooking(token, bookingId) {
+    const safeId = String(bookingId || '').replace(/["\\]/g, '').trim();
+    if (!safeId) return [];
+    const query = encodeURIComponent(`${RUPAY_BASE_QUERY} "${safeId}"`);
+    const result = await gmailFetch(`messages?q=${query}&maxResults=50`, token);
+    return result.messages || [];
+}
+
 function getLastFetchTime() {
     const t = localStorage.getItem(LAST_FETCH_TIME_KEY);
     return t ? parseInt(t) : null;
@@ -293,7 +317,8 @@ function saveLastFetchTime() {
 
 async function getEmailBody(messageId, token) {
     const msg = await gmailFetch(`messages/${messageId}?format=full`, token);
-    return extractBody(msg);
+    const receivedAt = msg.internalDate ? parseInt(msg.internalDate) : 0;
+    return { ...extractBody(msg), msgId: messageId, receivedAt };
 }
 
 function extractBody(message) {
@@ -431,6 +456,62 @@ function formatCouponDate(dateStr) {
 // 🎫 COUPON PARSING
 // ============================
 
+// Phrases that mean "the code isn't here yet" rather than a code
+const COUPON_STATUS_PHRASES = /will\s+be\s+(sent|shared|provided|issued|dispatched|mailed|delivered)|apolog|delay|pending|processing|in\s+progress|24.?48|hours|shortly|soon|await|not\s+available|within\s+\d|blank/i;
+// "1232137312/PIN:123123" — also tolerates spaces around "/" and ":" (e.g. "1232137312/ PIN:123123")
+const COUPON_PIN_RE = /(\d{8,})\s*\/\s*pin\s*:?\s*(\d+)/i;
+// Shape of a standalone code: ASFASBBSAF, SHFS231233213, SHFS231233213/1231234
+const COUPON_TOKEN_RE = /^[A-Za-z0-9][A-Za-z0-9\-_\/:]{4,39}$/;
+
+// Decide whether a "Coupon Code" value is a real code or a status message.
+// Returns { coupon, note }: coupon = normalised code or null;
+// note = the status text to show when pending (null if it's just a placeholder).
+function classifyCouponValue(raw) {
+    const text = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!text) return { coupon: null, note: null };
+
+    // 1. PIN pattern anywhere wins — normalise to CODE/PIN:NNN
+    const pin = text.match(COUPON_PIN_RE);
+    if (pin) return { coupon: `${pin[1]}/PIN:${pin[2]}`, note: null };
+
+    // 2. Placeholders
+    if (/^(na|n\/a|nil|none|tbd|-+|—)$/i.test(text) || text.length < 5) {
+        return { coupon: null, note: null };
+    }
+
+    // 3. Sentence / status message
+    const words = text.split(' ');
+    if (words.length >= 3 || /[.,!?](\s|$)/.test(text) || COUPON_STATUS_PHRASES.test(text)) {
+        return { coupon: null, note: text };
+    }
+
+    // 4. One or two tokens — exactly one must look like a code
+    const looksLikeCode = (t) => COUPON_TOKEN_RE.test(t) && (/\d/.test(t) || t === t.toUpperCase());
+    const candidates = words.filter(looksLikeCode);
+    if (candidates.length === 1) return { coupon: candidates[0], note: null };
+
+    return { coupon: null, note: text };
+}
+
+// Rank used when merging entries for the same booking: real code > pending with message > bare pending
+function couponRank(c) {
+    if (c.coupon) return 2;
+    if (c.pendingNote) return 1;
+    return 0;
+}
+
+// Pick the better of two entries for the same booking.
+// Higher rank wins; between two pendings the newer email's message wins; between two codes the existing one is kept.
+function mergeCouponEntries(existing, incoming) {
+    if (!existing) return incoming;
+    const msgIds = Array.from(new Set([...(existing.msgIds || []), ...(incoming.msgIds || [])]));
+    const re = couponRank(existing), ri = couponRank(incoming);
+    let winner = existing;
+    if (ri > re) winner = incoming;
+    else if (ri === re && ri < 2 && (incoming.receivedAt || 0) > (existing.receivedAt || 0)) winner = incoming;
+    return { ...winner, msgIds };
+}
+
 function parseCoupon(subject, body, rawHtml) {
     // Extract booking ID from subject
     let booking = subject;
@@ -441,6 +522,7 @@ function parseCoupon(subject, body, rawHtml) {
     let dateStr = '—';
     let coupon = null;
     let couponPending = false;
+    let pendingNote = null;
 
     // If we have raw HTML, parse the table structure directly
     if (rawHtml) {
@@ -452,15 +534,15 @@ function parseCoupon(subject, body, rawHtml) {
         // Extract Date of Issue
         if (fields['date of issue']) dateStr = fields['date of issue'];
 
-        // Extract Coupon Code
+        // Extract Coupon Code — distinguish a real code from a status message
         const rawCoupon = fields['coupon code'] || '';
         if (rawCoupon) {
-            if (/will be sent|24.?48|pending|processing|blank/i.test(rawCoupon)) {
-                couponPending = true;
-            } else if (rawCoupon.toUpperCase() === 'NA' || rawCoupon === '-' || rawCoupon.length < 3) {
-                couponPending = true;
+            const cls = classifyCouponValue(rawCoupon);
+            if (cls.coupon) {
+                coupon = cls.coupon;
             } else {
-                coupon = rawCoupon;
+                couponPending = true;
+                pendingNote = cls.note;
             }
         }
 
@@ -473,9 +555,9 @@ function parseCoupon(subject, body, rawHtml) {
     // in the body while the quoted original email says "will be sent in 24-48 hours"
     if (!coupon && body) {
         // FIRST: Try specific pin pattern (most reliable — e.g., "1007620045528921/pin:2794")
-        const pinMatch = body.match(/(\d{8,}\/pin:\d+)/i);
+        const pinMatch = body.match(COUPON_PIN_RE);
         if (pinMatch) {
-            coupon = pinMatch[1].trim();
+            coupon = `${pinMatch[1]}/PIN:${pinMatch[2]}`;
             couponPending = false;
         }
         // SECOND: Try alphanumeric codes (at least 6 chars, no common words)
@@ -511,8 +593,9 @@ function parseCoupon(subject, body, rawHtml) {
     // Clean up coupon
     if (coupon) coupon = coupon.replace(/^[:\-\s]+|[:\-\s]+$/g, '');
     if (coupon && coupon.length < 3) coupon = null;
+    if (coupon) { couponPending = false; pendingNote = null; }
 
-    return { booking, coupon, category, dateStr, couponPending };
+    return { booking, coupon, category, dateStr, couponPending, pendingNote };
 }
 
 // ============================
@@ -622,6 +705,33 @@ async function fetchCoupons(forceFullRefresh) {
         const searchResult = await searchEmails(token, lastFetch);
         const messages = searchResult.messages || [];
 
+        // Incremental only: re-check pending bookings by Booking ID, ignoring the date cut-off.
+        // A follow-up email that was read earlier but mis-classified (or skipped) is found this way.
+        if (isIncremental) {
+            const usedNow = getUsedCoupons();
+            const pendingEntries = existingCached.filter(c => !c.coupon && !usedNow[c.booking] && c.booking);
+            if (pendingEntries.length > 0) {
+                progressDetail.textContent = `Re-checking ${pendingEntries.length} pending booking${pendingEntries.length !== 1 ? 's' : ''}...`;
+                const seenIds = new Set(messages.map(m => m.id));
+                for (const entry of pendingEntries) {
+                    const known = new Set(entry.msgIds || []);
+                    let found = [];
+                    try {
+                        found = await searchEmailsByBooking(token, entry.booking);
+                    } catch (e) {
+                        console.log('[CardVault] Re-check failed for', entry.booking, e.message);
+                        continue;
+                    }
+                    for (const m of found) {
+                        if (!seenIds.has(m.id) && !known.has(m.id)) {
+                            seenIds.add(m.id);
+                            messages.push(m);
+                        }
+                    }
+                }
+            }
+        }
+
         if (messages.length === 0 && isIncremental) {
             // No new emails — just show cached data
             loading.style.display = 'none';
@@ -652,8 +762,8 @@ async function fetchCoupons(forceFullRefresh) {
             const batch = messages.slice(i, i + BATCH_SIZE);
             const results = await Promise.allSettled(
                 batch.map(async (msg) => {
-                    const { subject, body, rawHtml } = await getEmailBody(msg.id, token);
-                    return parseCoupon(subject, body, rawHtml);
+                    const { subject, body, rawHtml, msgId, receivedAt } = await getEmailBody(msg.id, token);
+                    return { ...parseCoupon(subject, body, rawHtml), msgIds: [msgId], receivedAt };
                 })
             );
             for (const r of results) {
@@ -675,20 +785,19 @@ async function fetchCoupons(forceFullRefresh) {
 
         updateProgress(progressBar, progressText, progressDetail, 100, '✅ Processing complete!', '');
 
-        // Deduplicate: merge new results with cached (new takes priority)
+        // Deduplicate: merge new results with cached by rank (real code > pending with message > pending)
         const byBooking = new Map();
         // First add existing cached (if incremental)
         for (const c of existingCached) {
             byBooking.set(c.booking, c);
         }
-        // Then add/overwrite with newly fetched (new coupon > pending)
+        const wasPending = new Set(existingCached.filter(c => !c.coupon).map(c => c.booking));
+        // Then merge newly fetched
         for (const p of allParsed) {
-            const existing = byBooking.get(p.booking);
-            if (!existing || (p.coupon && !existing.coupon)) {
-                byBooking.set(p.booking, p);
-            }
+            byBooking.set(p.booking, mergeCouponEntries(byBooking.get(p.booking), p));
         }
         const coupons = Array.from(byBooking.values());
+        const resolvedCount = coupons.filter(c => c.coupon && wasPending.has(c.booking)).length;
 
         // Sort by date descending (latest on top)
         coupons.sort((a, b) => {
@@ -726,10 +835,16 @@ async function fetchCoupons(forceFullRefresh) {
         saveCachedCoupons(coupons);
         renderCouponTable(coupons);
 
-        const newCount = allParsed.length;
-        const toastMsg = isIncremental
-            ? `🔄 ${newCount} new coupon${newCount !== 1 ? 's' : ''} added!`
-            : '🔄 Coupons updated!';
+        const newCount = coupons.length - existingCached.length;
+        let toastMsg;
+        if (!isIncremental) {
+            toastMsg = '🔄 Coupons updated!';
+        } else {
+            const parts = [];
+            if (newCount > 0) parts.push(`${newCount} new coupon${newCount !== 1 ? 's' : ''} added`);
+            if (resolvedCount > 0) parts.push(`${resolvedCount} pending resolved`);
+            toastMsg = parts.length ? `🔄 ${parts.join(' · ')}!` : '✅ No new coupons — all up to date!';
+        }
         if (typeof showToast === 'function') showToast(toastMsg);
 
     } catch (err) {
@@ -766,6 +881,10 @@ function renderCouponTable(coupons) {
         let couponCell;
         if (isPending) {
             couponCell = `<span style="color:#c89a20;font-style:italic;font-weight:600;font-size:0.85rem;">⏳ Pending</span>`;
+            if (c.pendingNote) {
+                const note = escapeHtmlCoupon(c.pendingNote);
+                couponCell += `<br><span title="${note}" style="display:inline-block;max-width:260px;color:#c89a20;font-style:italic;font-size:0.72rem;line-height:1.3;white-space:normal;">${note}</span>`;
+            }
         } else if (pinMatch) {
             const codeOnly = pinMatch[1].trim();
             const pinOnly = pinMatch[2].trim();
