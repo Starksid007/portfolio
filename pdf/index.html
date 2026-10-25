@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PDF Text Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#eef0f3; --panel:#fff; --ink:#1d2330; --muted:#6b7280; --line:#dfe3e8;
+          --accent:#2563eb; --ok:#15803d; --warn:#b45309; --hl:rgba(37,99,235,.10); }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         color:var(--ink); background:var(--bg); height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--panel);
+           border-bottom:1px solid var(--line); flex-wrap:wrap; white-space:nowrap; }
+  @media (max-width: 900px) { main { flex-direction:column; } aside { width:auto; max-height:38vh; border-left:0; border-top:1px solid var(--line); }
+    #viewer { padding:14px; } header h1 { display:none; } #find { width:120px; } }
+  header h1 { font-size:15px; margin:0 10px 0 0; font-weight:600; }
+  #fname { color:var(--muted); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sp { flex:1; }
+  button, select, input[type=search] { font:inherit; border:1px solid var(--line); background:#fff;
+           border-radius:6px; padding:5px 10px; color:var(--ink); }
+  button { cursor:pointer; } button:hover:not(:disabled) { border-color:#b8c0cc; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  label.tg { display:flex; gap:5px; align-items:center; color:var(--muted); user-select:none; }
+  main { flex:1; display:flex; min-height:0; }
+  #viewer { flex:1; overflow:auto; padding:24px; position:relative; }
+  #pages { display:flex; flex-direction:column; align-items:flex-start; gap:22px; width:max-content; margin:0 auto; }
+  .page { position:relative; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.18); }
+  .page img { display:block; width:100%; height:100%; user-select:none; -webkit-user-drag:none; }
+  .page .pno { position:absolute; top:-18px; left:0; font-size:11px; color:var(--muted); }
+  .span { position:absolute; cursor:text; border-radius:2px; }
+  .show .span { background:var(--hl); }
+  .span:hover { outline:1.5px solid var(--accent); background:var(--hl); }
+  .span.edited { outline:1.5px dashed var(--ok); }
+  .span.warn { outline:1.5px dashed var(--warn); }
+  .span.sel { outline:2px solid var(--accent); }
+  .span.match { background:rgba(250,204,21,.45); }
+  .editbox { position:absolute; z-index:5; border:2px solid var(--accent); background:#fff;
+             padding:0 2px; margin:0; outline:none; white-space:pre; box-shadow:0 2px 10px rgba(0,0,0,.2);
+             border-radius:2px; color:#000; }
+  aside { width:330px; background:var(--panel); border-left:1px solid var(--line); overflow:auto; padding:14px; }
+  aside h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:16px 0 8px; }
+  aside h2:first-child { margin-top:0; }
+  .kv { display:grid; grid-template-columns:70px 1fr; gap:3px 8px; font-size:13px; }
+  .kv b { font-weight:500; color:var(--muted); }
+  .sw { display:inline-block; width:11px; height:11px; border:1px solid #999; vertical-align:-1px; margin-right:4px; }
+  .note { padding:8px 10px; border-radius:6px; font-size:13px; margin-top:8px; }
+  .note.ok { background:#ecfdf3; color:var(--ok); } .note.warn { background:#fff7ed; color:var(--warn); }
+  .note.info { background:#f3f4f6; color:var(--muted); }
+  .edit-item { border:1px solid var(--line); border-radius:6px; padding:7px 9px; margin-bottom:7px; font-size:13px; cursor:pointer; }
+  .edit-item:hover { border-color:#b8c0cc; }
+  .edit-item .old { color:var(--muted); text-decoration:line-through; word-break:break-word; }
+  .edit-item .new { word-break:break-word; }
+  .edit-item .row { display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:4px; }
+  .edit-item button { padding:2px 8px; font-size:12px; }
+  .muted { color:var(--muted); }
+  #drop { position:absolute; inset:24px; border:2px dashed #b8c0cc; border-radius:12px; display:flex;
+          align-items:center; justify-content:center; flex-direction:column; gap:10px; color:var(--muted); text-align:center; }
+  #drop.over { border-color:var(--accent); background:rgba(37,99,235,.04); }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#111827; color:#fff;
+           padding:8px 14px; border-radius:8px; font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.on { opacity:.95; }
+  #busy { display:none; color:var(--muted); font-size:12px; } #busy.on { display:inline; }
+  kbd { font:11px ui-monospace, monospace; border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 4px; }
+
+  .fontbar { margin-top:8px; padding:8px 10px; border-radius:6px; background:#eff6ff; color:#1e3a8a; font-size:13px; }
+  .fontbar button { margin-top:6px; }
+  #loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  footer { font-size:11px; color:var(--muted); padding:4px 14px; background:var(--panel); border-top:1px solid var(--line); }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PDF Text Editor</h1>
+  <button id="openBtn" class="primary" disabled>Open PDF</button>
+  <input id="file" type="file" accept="application/pdf,.pdf" hidden>
+  <span id="fname"></span>
+  <span id="busy">Working...</span>
+  <span class="sp"></span>
+  <input id="find" type="search" placeholder="Find text" disabled>
+  <label class="tg"><input id="showBoxes" type="checkbox"> Show text boxes</label>
+  <select id="zoom" disabled>
+    <option value="0.75">75%</option><option value="1">100%</option><option value="1.25" selected>125%</option>
+    <option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option>
+  </select>
+  <button id="undoBtn" disabled title="Undo (Cmd/Ctrl+Z)">Undo</button>
+  <button id="dlBtn" class="primary" disabled>Download PDF</button>
+</header>
+<main>
+  <div id="viewer">
+    <div id="drop">
+      <div id="dropMsg" style="font-size:16px;color:var(--ink)">Loading the PDF engine (about 10 MB, first visit only)...</div>
+      <div>Everything runs inside your browser. Your PDF is never uploaded anywhere.</div>
+    </div>
+    <div id="pages"></div>
+  </div>
+  <aside>
+    <h2>Selected text</h2>
+    <div id="selInfo" class="muted">Click any text on the page to edit it.<br><br>
+      <kbd>Enter</kbd> apply &nbsp; <kbd>Esc</kbd> cancel &nbsp; <kbd>Tab</kbd> next line</div>
+    <div id="fontPanel"></div>
+    <h2>Edits <span id="editCount" class="muted"></span></h2>
+    <div id="edits" class="muted">No edits yet.</div>
+  </aside>
+</main>
+<footer>Runs locally in your browser. Built on <a href="https://mupdf.com" target="_blank" rel="noopener">MuPDF</a> (AGPL-3.0). <a href="https://github.com/" id="srcLink" target="_blank" rel="noopener">Source</a></footer>
+<div id="toast"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
