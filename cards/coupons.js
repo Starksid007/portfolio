@@ -372,30 +372,96 @@ function decodeBase64Url(data) {
     }
 }
 
-function stripHtml(html) {
+// Parse an HTML mail into a detached element, minus the parts that carry no message text
+function htmlToElement(html) {
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
+    tmp.querySelectorAll('style, script, title').forEach(el => el.remove());
+    return tmp;
 }
 
-// Parse HTML email to extract structured fields from the table
+// textContent, but with <br> and block boundaries turned into newlines so adjacent
+// cells/lines don't run together ("Reference IDRUPS-306492F0", "Processing(code will…")
+function textOf(el) {
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    clone.querySelectorAll('div, p, tr, td, th, li, h1, h2, h3, h4, h5, h6, table, blockquote')
+        .forEach(block => { block.prepend('\n'); block.append('\n'); });
+    return clone.textContent || '';
+}
+
+function stripHtml(html) {
+    return textOf(htmlToElement(html));
+}
+
+// Labels whose value may sit in the element right after the label (new RuPay mail:
+// <div>Benefit</div><div><strong>Big Basket</strong> – Flat Rs. 200 Off on Groceries</div>)
+const LABELLED_FIELDS = new Set(['benefit', 'reference id', 'coupon code', 'service provider', 'date of issue', 'booking id']);
+
+function normalizeLabel(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim().replace(/:$/, '').trim().toLowerCase();
+}
+
+// Single-line text of a value element. Link text ("Redeem Now", "+ Add to calendar") is UI,
+// not data, so it is dropped as long as something else remains.
+function fieldValueText(el) {
+    const full = textOf(el).replace(/\s+/g, ' ').trim();
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('a').forEach(a => a.remove());
+    const withoutLinks = textOf(clone).replace(/\s+/g, ' ').trim();
+    return withoutLinks || full;
+}
+
+// Parse HTML email to extract structured fields.
+// Supports the old table layout (<tr><td>Label:</td><td>Value</td></tr>) and the new
+// styled layout where a label element is followed by its value element.
 function parseHtmlEmail(html) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
+    const tmp = htmlToElement(html);
     const fields = {};
 
-    // Extract key-value pairs from table rows: <td>Label:</td><td>Value</td>
-    const rows = tmp.querySelectorAll('tr');
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
+    // 1. Table rows: <td>Label:</td><td>Value</td> (direct cells only — the new mail nests tables)
+    tmp.querySelectorAll('tr').forEach(row => {
+        const cells = row.querySelectorAll(':scope > td, :scope > th');
         if (cells.length >= 2) {
-            const label = (cells[0].textContent || '').trim().replace(/:$/, '').toLowerCase();
-            const value = (cells[1].textContent || '').trim();
+            const label = normalizeLabel(cells[0].textContent);
+            const value = fieldValueText(cells[1]);
             if (label && value) fields[label] = value;
         }
     });
 
+    // 2. Label element followed by value element
+    tmp.querySelectorAll('div, span, p, td, th, b, strong, label').forEach(el => {
+        if (el.children.length > 0) return; // labels are leaf elements
+        const label = normalizeLabel(el.textContent);
+        if (!LABELLED_FIELDS.has(label) || fields[label] !== undefined) return;
+        // Climb out of wrappers that hold nothing but the label: <td><b>Label</b></td><td>Value</td>
+        let node = el;
+        while (!node.nextElementSibling && node.parentElement && node.parentElement !== tmp
+               && normalizeLabel(node.parentElement.textContent) === label) {
+            node = node.parentElement;
+        }
+        const valueEl = node.nextElementSibling;
+        if (!valueEl) return;
+        const value = fieldValueText(valueEl);
+        if (value) fields[label] = value;
+    });
+
     return fields;
+}
+
+// "Big Basket – Flat Rs. 200 Off on Groceries" → "Big Basket" (keeps the category column and
+// analytics grouping consistent with the old mail's "Service Provider" field)
+function providerFromBenefit(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    return (t.split(/\s+[–—-]\s+/)[0] || t).trim();
+}
+
+// ms timestamp → "13-Nov-2026", the same shape as the mail's "Date of Issue" field
+function formatDateStrFromTs(ts) {
+    const d = new Date(ts);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${d.getDate()}-${months[d.getMonth()]}-${d.getFullYear()}`;
 }
 
 // Format timestamp (ms) → "16th Mar, 8:30 PM"
@@ -493,6 +559,22 @@ function classifyCouponValue(raw) {
     return { coupon: null, note: text };
 }
 
+// Bumped whenever parseCoupon learns to read something older versions missed. Cached entries
+// written by an older parser that still lack category/date get their mails re-read once.
+const COUPON_PARSER_VERSION = 2;
+
+function isBlankField(v) {
+    return !v || v === '—';
+}
+
+function isIncompleteEntry(c) {
+    return isBlankField(c.category) || isBlankField(c.dateStr);
+}
+
+function needsReparse(c) {
+    return (c.parserVersion || 0) < COUPON_PARSER_VERSION && isIncompleteEntry(c);
+}
+
 // Rank used when merging entries for the same booking: real code > pending with message > bare pending
 function couponRank(c) {
     if (c.coupon) return 2;
@@ -501,18 +583,28 @@ function couponRank(c) {
 }
 
 // Pick the better of two entries for the same booking.
-// Higher rank wins; between two pendings the newer email's message wins; between two codes the existing one is kept.
+// Higher rank wins. On a tie: a fresh parse of a mail we already hold replaces the older parse of it;
+// between two pendings the newer email's message wins; between two codes the existing one is kept.
+// Whatever metadata the winner lacks (category/date) is kept from the loser.
 function mergeCouponEntries(existing, incoming) {
     if (!existing) return incoming;
-    const msgIds = Array.from(new Set([...(existing.msgIds || []), ...(incoming.msgIds || [])]));
+    const existingIds = existing.msgIds || [];
+    const incomingIds = incoming.msgIds || [];
+    const msgIds = Array.from(new Set([...existingIds, ...incomingIds]));
+    const isReparse = incomingIds.length > 0 && incomingIds.every(id => existingIds.includes(id));
     const re = couponRank(existing), ri = couponRank(incoming);
-    let winner = existing;
-    if (ri > re) winner = incoming;
-    else if (ri === re && ri < 2 && (incoming.receivedAt || 0) > (existing.receivedAt || 0)) winner = incoming;
-    return { ...winner, msgIds };
+    let winner = existing, loser = incoming;
+    if (ri > re || (ri === re && (isReparse || (ri < 2 && (incoming.receivedAt || 0) > (existing.receivedAt || 0))))) {
+        winner = incoming;
+        loser = existing;
+    }
+    const merged = { ...winner, msgIds, parserVersion: Math.max(existing.parserVersion || 0, incoming.parserVersion || 0) };
+    if (isBlankField(merged.category) && !isBlankField(loser.category)) merged.category = loser.category;
+    if (isBlankField(merged.dateStr) && !isBlankField(loser.dateStr)) merged.dateStr = loser.dateStr;
+    return merged;
 }
 
-function parseCoupon(subject, body, rawHtml) {
+function parseCoupon(subject, body, rawHtml, receivedAt) {
     // Extract booking ID from subject
     let booking = subject;
     const bookingMatch = subject.match(/Booking\s*ID\s*[:\-]?\s*([A-Za-z0-9\-]+)/i);
@@ -524,14 +616,15 @@ function parseCoupon(subject, body, rawHtml) {
     let couponPending = false;
     let pendingNote = null;
 
-    // If we have raw HTML, parse the table structure directly
+    // If we have raw HTML, parse the labelled fields directly
     if (rawHtml) {
         const fields = parseHtmlEmail(rawHtml);
 
-        // Extract Service Provider
+        // Old mail: "Service Provider: Big Basket". New mail: "Benefit: Big Basket – Flat Rs. 200 Off on Groceries"
         if (fields['service provider']) category = fields['service provider'];
+        else if (fields['benefit']) category = providerFromBenefit(fields['benefit']) || category;
 
-        // Extract Date of Issue
+        // Extract Date of Issue (old mail only — the new mail has no issue date; see receivedAt fallback below)
         if (fields['date of issue']) dateStr = fields['date of issue'];
 
         // Extract Coupon Code — distinguish a real code from a status message
@@ -546,8 +639,11 @@ function parseCoupon(subject, body, rawHtml) {
             }
         }
 
-        // Fallback: booking ID from body fields
-        if (!bookingMatch && fields['booking id']) booking = fields['booking id'];
+        // Fallback: booking ID from body fields ("Booking ID" in the old mail, "Reference ID" in the new one)
+        if (!bookingMatch) {
+            if (fields['booking id']) booking = fields['booking id'];
+            else if (fields['reference id']) booking = fields['reference id'];
+        }
     }
 
     // Fallback to plain text parsing (reply emails often have coupon in body text)
@@ -562,8 +658,9 @@ function parseCoupon(subject, body, rawHtml) {
         }
         // SECOND: Try alphanumeric codes (at least 6 chars, no common words)
         if (!coupon) {
-            // Find ALL "Coupon Code:" occurrences and pick the one with an actual code
-            const allMatches = [...body.matchAll(/Coupon\s*Code\s*[:\-]\s*([^\n\r]{1,60})/gi)];
+            // Find ALL "Coupon Code" occurrences and pick the one with an actual code.
+            // The separator is optional: the new mail puts the code on the line after the label.
+            const allMatches = [...body.matchAll(/Coupon\s*Code\s*[:\-]?\s*([^\n\r]{1,60})/gi)];
             for (const m of allMatches) {
                 const val = m[1].trim().split(/\s+/)[0]; // take first word/token
                 if (val && val.length >= 5 && /[0-9]/.test(val) && !/will|sent|pending|hours|processing/i.test(val)) {
@@ -584,18 +681,27 @@ function parseCoupon(subject, body, rawHtml) {
         }
     }
 
+    // Fallback: provider named in the subject ("… RuPay Select Confirmation for Big Basket Benefit")
+    if ((!category || category === '—') && subject) {
+        const subjMatch = subject.match(/Confirmation\s+for\s+(.+?)\s+Benefit\s*$/i);
+        if (subjMatch) category = subjMatch[1].trim();
+    }
+
     // Fallback: extract date from body text
     if ((!dateStr || dateStr === '—') && body) {
         const dateMatch = body.match(/Date\s*(?:of\s*Issue)?\s*[:\-]\s*(\d{1,2}[\-\s]\w{3}[\-\s]\d{2,4})/i);
         if (dateMatch) dateStr = dateMatch[1].trim();
     }
 
+    // Fallback: the mail states no issue date (new format) — use the day it arrived
+    if ((!dateStr || dateStr === '—') && receivedAt) dateStr = formatDateStrFromTs(receivedAt);
+
     // Clean up coupon
     if (coupon) coupon = coupon.replace(/^[:\-\s]+|[:\-\s]+$/g, '');
     if (coupon && coupon.length < 3) coupon = null;
     if (coupon) { couponPending = false; pendingNote = null; }
 
-    return { booking, coupon, category, dateStr, couponPending, pendingNote };
+    return { booking, coupon, category, dateStr, couponPending, pendingNote, parserVersion: COUPON_PARSER_VERSION };
 }
 
 // ============================
@@ -705,14 +811,40 @@ async function fetchCoupons(forceFullRefresh) {
         const searchResult = await searchEmails(token, lastFetch);
         const messages = searchResult.messages || [];
 
-        // Incremental only: re-check pending bookings by Booking ID, ignoring the date cut-off.
-        // A follow-up email that was read earlier but mis-classified (or skipped) is found this way.
+        // Incremental only: pull in mails the date cut-off would miss.
         if (isIncremental) {
             const usedNow = getUsedCoupons();
-            const pendingEntries = existingCached.filter(c => !c.coupon && !usedNow[c.booking] && c.booking);
+            const seenIds = new Set(messages.map(m => m.id));
+            const addMessage = (id) => {
+                if (id && !seenIds.has(id)) { seenIds.add(id); messages.push({ id }); }
+            };
+            const searchedBookings = new Set();
+
+            // 1. Re-read the mails behind entries an older parser saved without category/date
+            //    (e.g. the first new-format mails), so they get repaired in place.
+            const staleEntries = existingCached.filter(needsReparse);
+            if (staleEntries.length > 0) {
+                progressDetail.textContent = `Re-reading ${staleEntries.length} incomplete entr${staleEntries.length !== 1 ? 'ies' : 'y'}...`;
+                for (const entry of staleEntries) {
+                    let ids = entry.msgIds || [];
+                    if (ids.length === 0 && entry.booking) {
+                        searchedBookings.add(entry.booking);
+                        try {
+                            ids = (await searchEmailsByBooking(token, entry.booking)).map(m => m.id);
+                        } catch (e) {
+                            console.log('[CardVault] Re-read failed for', entry.booking, e.message);
+                            continue;
+                        }
+                    }
+                    ids.forEach(addMessage);
+                }
+            }
+
+            // 2. Re-check pending bookings by Booking ID. A follow-up email that was read earlier
+            //    but mis-classified (or skipped) is found this way.
+            const pendingEntries = existingCached.filter(c => !c.coupon && !usedNow[c.booking] && c.booking && !searchedBookings.has(c.booking));
             if (pendingEntries.length > 0) {
                 progressDetail.textContent = `Re-checking ${pendingEntries.length} pending booking${pendingEntries.length !== 1 ? 's' : ''}...`;
-                const seenIds = new Set(messages.map(m => m.id));
                 for (const entry of pendingEntries) {
                     const known = new Set(entry.msgIds || []);
                     let found = [];
@@ -723,10 +855,7 @@ async function fetchCoupons(forceFullRefresh) {
                         continue;
                     }
                     for (const m of found) {
-                        if (!seenIds.has(m.id) && !known.has(m.id)) {
-                            seenIds.add(m.id);
-                            messages.push(m);
-                        }
+                        if (!known.has(m.id)) addMessage(m.id);
                     }
                 }
             }
@@ -763,7 +892,7 @@ async function fetchCoupons(forceFullRefresh) {
             const results = await Promise.allSettled(
                 batch.map(async (msg) => {
                     const { subject, body, rawHtml, msgId, receivedAt } = await getEmailBody(msg.id, token);
-                    return { ...parseCoupon(subject, body, rawHtml), msgIds: [msgId], receivedAt };
+                    return { ...parseCoupon(subject, body, rawHtml, receivedAt), msgIds: [msgId], receivedAt };
                 })
             );
             for (const r of results) {
@@ -792,12 +921,14 @@ async function fetchCoupons(forceFullRefresh) {
             byBooking.set(c.booking, c);
         }
         const wasPending = new Set(existingCached.filter(c => !c.coupon).map(c => c.booking));
+        const wasIncomplete = new Set(existingCached.filter(isIncompleteEntry).map(c => c.booking));
         // Then merge newly fetched
         for (const p of allParsed) {
             byBooking.set(p.booking, mergeCouponEntries(byBooking.get(p.booking), p));
         }
         const coupons = Array.from(byBooking.values());
         const resolvedCount = coupons.filter(c => c.coupon && wasPending.has(c.booking)).length;
+        const repairedCount = coupons.filter(c => wasIncomplete.has(c.booking) && !isIncompleteEntry(c)).length;
 
         // Sort by date descending (latest on top)
         coupons.sort((a, b) => {
@@ -843,6 +974,7 @@ async function fetchCoupons(forceFullRefresh) {
             const parts = [];
             if (newCount > 0) parts.push(`${newCount} new coupon${newCount !== 1 ? 's' : ''} added`);
             if (resolvedCount > 0) parts.push(`${resolvedCount} pending resolved`);
+            if (repairedCount > 0) parts.push(`${repairedCount} entr${repairedCount !== 1 ? 'ies' : 'y'} updated`);
             toastMsg = parts.length ? `🔄 ${parts.join(' · ')}!` : '✅ No new coupons — all up to date!';
         }
         if (typeof showToast === 'function') showToast(toastMsg);
